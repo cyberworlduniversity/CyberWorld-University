@@ -130,6 +130,26 @@ const api = {
     return apiRequest("/student/quizzes/" + encodeURIComponent(quizId));
   },
 
+  async exams() {
+    const data = await apiRequest("/student/exams");
+    return data.exams || [];
+  },
+
+  async exam(examId) {
+    return apiRequest("/student/exams/" + encodeURIComponent(examId));
+  },
+
+  async submitExam(examId, answers) {
+    return apiRequest("/student/exams/" + encodeURIComponent(examId) + "/submit", {
+      method: "POST", body: JSON.stringify({ answers })
+    });
+  },
+
+  async certificates() {
+    const data = await apiRequest("/student/certificates");
+    return data.certificates || [];
+  },
+
   async submitQuiz(quizId, answers) {
     return apiRequest("/student/quizzes/" + encodeURIComponent(quizId) + "/submit", {
       method: "POST",
