@@ -19,7 +19,7 @@ import { firebaseConfig } from "../firebase-config.js";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const API_BASE = "https://cyberworld-university.onrender.com/api";
+const API_BASE = "https://cyberworlduniversity.onrender.com/api";
 
 async function currentUser() {
   if (auth.currentUser) return auth.currentUser;
@@ -80,7 +80,9 @@ const api = {
   currentUser,
 
   async userProfile(uid) {
-    const snapshot = await getDoc(doc(db, "users", uid));
+    const user = uid ? { uid } : await currentUser();
+    if (!user) return null;
+    const snapshot = await getDoc(doc(db, "users", user.uid));
     return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
   },
 
