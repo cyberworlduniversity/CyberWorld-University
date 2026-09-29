@@ -1,13 +1,18 @@
-const CWU_API = window.CWU_API || "http://127.0.0.1:5000/api";
+const CWU_API = "https://cyberworld-university.onrender.com/api";
 
 async function cwuApi(path, options = {}) {
   const response = await fetch(CWU_API + path, {
-    credentials: "include",
-    headers: {"Content-Type": "application/json", ...(options.headers || {})},
-    ...options
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
   });
+
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Request failed");
+  if (!response.ok) {
+    throw new Error(data.error || data.message || ("Request failed (" + response.status + ")"));
+  }
   return data;
 }
 
