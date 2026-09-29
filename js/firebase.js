@@ -9,16 +9,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
   getFirestore,
-  collection,
   doc,
   getDoc,
-  getDocs,
-  addDoc,
   setDoc,
-  query,
-  where,
-  orderBy,
-  limit,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { firebaseConfig } from "../firebase-config.js";
@@ -26,16 +19,51 @@ import { firebaseConfig } from "../firebase-config.js";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const API_BASE = "https://cyberworld-university.onrender.com/api";
+
+async function currentUser() {
+  if (auth.currentUser) return auth.currentUser;
+  return new Promise(resolve => {
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
+}
+
+async function apiRequest(path, options = {}) {
+  const user = await currentUser();
+  const token = user ? await user.getIdToken() : null;
+  const response = await fetch(API_BASE + path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: "Bearer " + token } : {}),
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.message || ("API request failed (" + response.status + ")"));
+  }
+  return data;
+}
 
 const api = {
   app,
   auth,
   db,
+  apiBase: API_BASE,
 
   async register(name, email, password) {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(credential.user, { displayName: name });
-    await setUserProfile(credential.user, name, email);
+    await setDoc(doc(db, "users", credential.user.uid), {
+      name,
+      email,
+      role: "student",
+      createdAt: serverTimestamp()
+    });
     return credential.user;
   },
 
@@ -46,113 +74,44 @@ const api = {
 
   async logout() {
     await signOut(auth);
+    localStorage.removeItem("cwu_user");
   },
 
-  async currentUser() {
-    if (auth.currentUser) return auth.currentUser;
-    return new Promise(resolve => {
-      const unsubscribe = onAuthStateChanged(auth, user => {
-        unsubscribe();
-        resolve(user);
-      });
-    });
-  },
+  currentUser,
 
   async userProfile(uid) {
     const snapshot = await getDoc(doc(db, "users", uid));
     return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
   },
 
+  async me() {
+    return apiRequest("/auth/me");
+  },
+
   async courses() {
-    const q = query(
-      collection(db, "courses"),
-      where("status", "==", "published"),
-      orderBy("createdAt", "desc")
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    const data = await apiRequest("/courses");
+    return data.courses || [];
   },
 
   async course(courseId) {
-    const courseSnapshot = await getDoc(doc(db, "courses", courseId));
-    if (!courseSnapshot.exists() || courseSnapshot.data().status !== "published") {
-      throw new Error("Course not found");
-    }
-
-    const phaseQuery = query(
-      collection(db, "course_phases"),
-      where("courseId", "==", courseId),
-      where("status", "==", "published"),
-      orderBy("sortOrder", "asc")
-    );
-    const phases = await getDocs(phaseQuery);
-    return {
-      course: { id: courseSnapshot.id, ...courseSnapshot.data() },
-      phases: phases.docs.map(item => ({ id: item.id, ...item.data() }))
-    };
+    return apiRequest("/courses/" + encodeURIComponent(courseId));
   },
 
   async enroll(courseId) {
-    const user = await this.currentUser();
-    if (!user) throw new Error("Please login before enrolling.");
-    if ((await this.userProfile(user.uid))?.role !== "student") {
-      throw new Error("Only student accounts can enroll.");
-    }
-
-    const existing = await getDocs(query(
-      collection(db, "enrollments"),
-      where("studentId", "==", user.uid),
-      where("courseId", "==", courseId),
-      limit(1)
-    ));
-    if (!existing.empty) return { alreadyEnrolled: true, id: existing.docs[0].id };
-
-    const ref = await addDoc(collection(db, "enrollments"), {
-      studentId: user.uid,
-      courseId,
-      progress: 0,
-      status: "active",
-      enrolledAt: serverTimestamp()
+    return apiRequest("/enrollments", {
+      method: "POST",
+      body: JSON.stringify({ course_id: courseId })
     });
-    return { alreadyEnrolled: false, id: ref.id };
   },
 
   async enrollments() {
-    const user = await this.currentUser();
-    if (!user) throw new Error("Authentication required.");
-    const snapshot = await getDocs(query(
-      collection(db, "enrollments"),
-      where("studentId", "==", user.uid),
-      orderBy("enrolledAt", "desc")
-    ));
+    const data = await apiRequest("/student/enrollments");
+    return data.enrollments || [];
+  },
 
-    const results = [];
-    for (const item of snapshot.docs) {
-      const enrollment = { id: item.id, ...item.data() };
-      const courseSnapshot = await getDoc(doc(db, "courses", enrollment.courseId));
-      if (!courseSnapshot.exists()) continue;
-      const course = courseSnapshot.data();
-      results.push({
-        enrollmentId: item.id,
-        courseId: enrollment.courseId,
-        title: course.title || "Course",
-        thumbnail: course.thumbnail || "",
-        level: course.level || "",
-        progress: Number(enrollment.progress || 0),
-        status: enrollment.status || "active"
-      });
-    }
-    return results;
+  async adminStats() {
+    return apiRequest("/admin/stats");
   }
 };
-
-async function setUserProfile(user, name, email) {
-  await setDoc(doc(db, "users", user.uid), {
-    name,
-    email,
-    role: "student",
-    createdAt: serverTimestamp()
-  });
-}
 
 window.CWU = api;
