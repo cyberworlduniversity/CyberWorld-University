@@ -1,25 +1,32 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Courses | CWU</title><link rel="stylesheet" href="css/style.css"></head>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Courses | Cyber World University</title><link rel="stylesheet" href="css/style.css"></head>
 <body>
-<header class="navbar">
-<a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a>
+<header class="navbar"><a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a>
 <button class="menu-btn" onclick="toggleMenu()">☰</button>
-<nav class="nav-links" id="mainNav"><a href="index.html">Home</a><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a><a href="about.html">About</a><a href="contact.html">Contact</a></nav>
-<div class="nav-actions"><a class="btn btn-outline" href="login.html">Login</a><a class="btn btn-primary" href="register.html">Get Started</a></div>
-</header>
-<main><div class="container"><section class="page-head"><span class="eyebrow">CWU COURSES</span><h1>Cybersecurity Courses</h1><p>Browse published courses created through the CWU administration system.</p></section><div class="toolbar"><input id="courseSearch" class="input" style="max-width:500px" placeholder="Search courses..."><select id="categoryFilter" class="select" style="max-width:320px"><option value="">All Categories</option></select></div><div class="grid" id="courseList"></div></div></main>
+<nav class="nav-links" id="mainNav"><a href="index.html">Home</a><a class="active" href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a><a href="about.html">About</a><a href="contact.html">Contact</a></nav>
+<div class="nav-actions"><a class="btn btn-outline" href="login.html">Login</a><a class="btn btn-primary" href="register.html">Get Started</a></div></header>
+<main><div class="container">
+<section class="page-head"><span class="eyebrow">CWU COURSES</span><h1>Cybersecurity Courses</h1><p>Explore published learning paths created through the CWU platform.</p></section>
+<div class="toolbar"><input id="courseSearch" class="input" style="max-width:500px" placeholder="Search courses..." aria-label="Search courses"><select id="categoryFilter" class="select" style="max-width:320px" aria-label="Filter by category"><option value="">All Categories</option></select></div>
+<div class="grid" id="courseList"><div class="notice">Loading courses...</div></div>
+</div></main>
 <footer><div class="container footer-grid"><div><h2>⌬ Cyber World University</h2><p class="muted">Online cybersecurity education and student learning platform.</p></div><div><h3>Platform</h3><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a></div><div><h3>Company</h3><a href="about.html">About</a><a href="contact.html">Contact</a></div><div><h3>Account</h3><a href="login.html">Login</a><a href="register.html">Register</a></div></div><div class="container footer-bottom">© 2026 Cyber World University. All Rights Reserved.</div></footer>
 <div id="toast" class="toast"></div>
-<script type="module">
+<script src="js/app.js"></script><script type="module">
 import "./js/firebase.js";
-document.addEventListener("DOMContentLoaded", async () => {
-  const list = document.getElementById("courseList");
-  try {
-    const courses = await window.CWU.courses();
-    list.innerHTML = courses.length ? courses.map(c => `<article class="card"><span class="badge">${c.category || "Cybersecurity"}</span><h3>${c.title || ""}</h3><p class="muted">${c.description || ""}</p><p class="muted">${c.level || "All levels"} · ${c.durationMinutes || 0} min</p><a class="btn btn-primary" href="course-details.html?id=${encodeURIComponent(c.id)}">View Course</a></article>`).join("") : '<div class="notice">No published courses are available yet.</div>';
-  } catch (err) {
-    list.innerHTML = `<div class="notice">Unable to load Firebase courses: ${err.message}</div>`;
-  }
-});
-</script><script src="js/app.js"></script></body></html>
+const list=document.getElementById("courseList"), search=document.getElementById("courseSearch"), filter=document.getElementById("categoryFilter");
+let courses=[];
+const esc=v=>window.CWU_UI.esc(v);
+function render(){
+ const q=(search.value||"").trim().toLowerCase(), cat=filter.value;
+ const items=courses.filter(c=>(!cat||c.category===cat)&&(!q||[c.title,c.description,c.category,c.level].join(" ").toLowerCase().includes(q)));
+ list.innerHTML=items.length?items.map(c=>'<article class="card"><div class="course-thumb">⌬</div><div class="card-body"><span class="eyebrow">'+esc(c.category||"Cybersecurity")+'</span><h3>'+esc(c.title||"Untitled Course")+'</h3><p class="muted">'+esc(c.description||"")+'</p><div class="meta"><span class="pill">'+esc(c.level||"All levels")+'</span><span class="pill">'+Number(c.durationMinutes||0)+' min</span></div><div class="card-footer"><b>'+(c.price||"Free")+'</b><a class="btn btn-primary" href="course-details.html?id='+encodeURIComponent(c.id)+'">View Course</a></div></div></article>').join(""):'<div class="notice">No published courses match your search.</div>';
+}
+async function load(){
+ try{courses=await window.CWU.courses();[...new Set(courses.map(c=>c.category).filter(Boolean))].sort().forEach(c=>filter.insertAdjacentHTML("beforeend",'<option value="'+esc(c)+'">'+esc(c)+'</option>'));render();}
+ catch(e){list.innerHTML='<div class="notice">Unable to load courses: '+esc(e.message)+'</div>';}
+}
+search.addEventListener("input",render);filter.addEventListener("change",render);load();
+</script></body></html>
