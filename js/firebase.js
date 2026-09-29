@@ -14,6 +14,7 @@ import {
   getDoc,
   getDocs,
   addDoc,
+  setDoc,
   query,
   where,
   orderBy,
@@ -146,13 +147,11 @@ const api = {
 };
 
 async function setUserProfile(user, name, email) {
-  await import("https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js").then(async firestore => {
-    await firestore.setDoc(doc(db, "users", user.uid), {
-      name,
-      email,
-      role: "student",
-      createdAt: serverTimestamp()
-    });
+  await setDoc(doc(db, "users", user.uid), {
+    name,
+    email,
+    role: "student",
+    createdAt: serverTimestamp()
   });
 }
 
