@@ -50,3 +50,25 @@ The API verifies Firebase ID tokens from the frontend. Protected requests must s
 - `GET /api/admin/stats`
 
 The remaining admin CRUD endpoints will be migrated from the legacy MySQL implementation to Firestore in the next phase.
+
+
+## Render deployment
+
+Create a Render Web Service connected to this repository.
+
+Recommended settings:
+
+- Language: Python 3
+- Branch: cwu-flask-mysql-foundation (until the backend is merged into main)
+- Root Directory: backend
+- Build Command: pip install -r requirements.txt
+- Start Command: gunicorn app:app
+- Health check path: /api/health
+
+Set these environment variables in Render:
+
+- FLASK_DEBUG=false
+- PORT=10000
+- FIREBASE_SERVICE_ACCOUNT_JSON=<the complete Firebase service-account JSON>
+
+Never commit the Firebase service-account JSON to GitHub. Store it only as a protected Render environment variable.
