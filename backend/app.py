@@ -430,6 +430,146 @@ def admin_delete_lesson(lesson_id):
 
 
 
+def content_status(value):
+    status = str(value or "draft").strip().lower()
+    if status not in {"draft", "published"}:
+        raise ValueError("Invalid status")
+    return status
+
+
+def video_payload(data):
+    return {
+        "title": required_text(data, "title"),
+        "videoUrl": required_text(data, "videoUrl"),
+        "thumbnail": str(data.get("thumbnail", "")).strip(),
+        "description": str(data.get("description", "")).strip(),
+        "sortOrder": int(data.get("sortOrder", 1) or 1),
+        "durationMinutes": int(data.get("durationMinutes", 0) or 0),
+        "status": content_status(data.get("status", "draft")),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+
+
+def material_payload(data):
+    return {
+        "title": required_text(data, "title"),
+        "materialUrl": required_text(data, "materialUrl"),
+        "fileType": str(data.get("fileType", "PDF")).strip().upper(),
+        "description": str(data.get("description", "")).strip(),
+        "sortOrder": int(data.get("sortOrder", 1) or 1),
+        "status": content_status(data.get("status", "draft")),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+
+
+@app.get("/api/admin/lessons/<lesson_id>/videos")
+@firebase_user_required("admin")
+def admin_lesson_videos(lesson_id):
+    if not db.collection("lessons").document(lesson_id).get().exists:
+        return jsonify({"error": "Lesson not found"}), 404
+    docs = db.collection("videos").where("lessonId", "==", lesson_id).order_by("sortOrder").stream()
+    return jsonify({"videos": [serialize(doc) for doc in docs]})
+
+
+@app.post("/api/admin/videos")
+@firebase_user_required("admin")
+def admin_create_video():
+    data = admin_payload()
+    lesson_id = required_text(data, "lessonId")
+    if not db.collection("lessons").document(lesson_id).get().exists:
+        return jsonify({"error": "Lesson not found"}), 404
+    try:
+        payload = video_payload(data)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid video data"}), 400
+    payload.update({
+        "lessonId": lesson_id,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "createdBy": request.cwu_user["uid"],
+    })
+    ref = db.collection("videos").document()
+    ref.set(payload)
+    return jsonify({"video": serialize(ref.get())}), 201
+
+
+@app.put("/api/admin/videos/<video_id>")
+@firebase_user_required("admin")
+def admin_update_video(video_id):
+    ref = db.collection("videos").document(video_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Video not found"}), 404
+    try:
+        payload = video_payload(admin_payload())
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid video data"}), 400
+    ref.update(payload)
+    return jsonify({"video": serialize(ref.get())})
+
+
+@app.delete("/api/admin/videos/<video_id>")
+@firebase_user_required("admin")
+def admin_delete_video(video_id):
+    ref = db.collection("videos").document(video_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Video not found"}), 404
+    ref.delete()
+    return jsonify({"message": "Video deleted"})
+
+
+@app.get("/api/admin/lessons/<lesson_id>/materials")
+@firebase_user_required("admin")
+def admin_lesson_materials(lesson_id):
+    if not db.collection("lessons").document(lesson_id).get().exists:
+        return jsonify({"error": "Lesson not found"}), 404
+    docs = db.collection("materials").where("lessonId", "==", lesson_id).order_by("sortOrder").stream()
+    return jsonify({"materials": [serialize(doc) for doc in docs]})
+
+
+@app.post("/api/admin/materials")
+@firebase_user_required("admin")
+def admin_create_material():
+    data = admin_payload()
+    lesson_id = required_text(data, "lessonId")
+    if not db.collection("lessons").document(lesson_id).get().exists:
+        return jsonify({"error": "Lesson not found"}), 404
+    try:
+        payload = material_payload(data)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid material data"}), 400
+    payload.update({
+        "lessonId": lesson_id,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "createdBy": request.cwu_user["uid"],
+    })
+    ref = db.collection("materials").document()
+    ref.set(payload)
+    return jsonify({"material": serialize(ref.get())}), 201
+
+
+@app.put("/api/admin/materials/<material_id>")
+@firebase_user_required("admin")
+def admin_update_material(material_id):
+    ref = db.collection("materials").document(material_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Material not found"}), 404
+    try:
+        payload = material_payload(admin_payload())
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid material data"}), 400
+    ref.update(payload)
+    return jsonify({"material": serialize(ref.get())})
+
+
+@app.delete("/api/admin/materials/<material_id>")
+@firebase_user_required("admin")
+def admin_delete_material(material_id):
+    ref = db.collection("materials").document(material_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Material not found"}), 404
+    ref.delete()
+    return jsonify({"message": "Material deleted"})
+
+
 def student_enrollment(course_id, uid):
     docs = (
         db.collection("enrollments")
