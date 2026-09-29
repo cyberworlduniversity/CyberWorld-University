@@ -1171,6 +1171,76 @@ def admin_students():
     return jsonify({"students": students})
 
 
+@app.get("/api/advertisements")
+def public_advertisements():
+    docs = db.collection("advertisements").where("enabled", "==", True).stream()
+    return jsonify({"advertisements": [serialize(doc) for doc in docs]})
+
+
+@app.get("/api/admin/advertisements")
+@firebase_user_required("admin")
+def admin_advertisements():
+    docs = db.collection("advertisements").stream()
+    ads = [serialize(doc) for doc in docs]
+    ads.sort(key=lambda item: str(item.get("createdAt", "")), reverse=True)
+    return jsonify({"advertisements": ads})
+
+
+@app.post("/api/admin/advertisements")
+@firebase_user_required("admin")
+def admin_create_advertisement():
+    data = admin_payload()
+    try:
+        title = required_text(data, "title")
+    except ValueError:
+        return jsonify({"error": "title is required"}), 400
+    payload = {
+        "title": title,
+        "description": str(data.get("description", "")).strip(),
+        "button": str(data.get("button", "Learn More")).strip() or "Learn More",
+        "url": str(data.get("url", "courses.html")).strip() or "courses.html",
+        "enabled": bool(data.get("enabled", True)),
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+        "createdBy": request.cwu_user["uid"],
+    }
+    ref = db.collection("advertisements").document()
+    ref.set(payload)
+    return jsonify({"advertisement": serialize(ref.get())}), 201
+
+
+@app.put("/api/admin/advertisements/<advertisement_id>")
+@firebase_user_required("admin")
+def admin_update_advertisement(advertisement_id):
+    ref = db.collection("advertisements").document(advertisement_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Advertisement not found"}), 404
+    data = admin_payload()
+    try:
+        title = required_text(data, "title")
+    except ValueError:
+        return jsonify({"error": "title is required"}), 400
+    ref.update({
+        "title": title,
+        "description": str(data.get("description", "")).strip(),
+        "button": str(data.get("button", "Learn More")).strip() or "Learn More",
+        "url": str(data.get("url", "courses.html")).strip() or "courses.html",
+        "enabled": bool(data.get("enabled", True)),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    return jsonify({"advertisement": serialize(ref.get())})
+
+
+@app.delete("/api/admin/advertisements/<advertisement_id>")
+@firebase_user_required("admin")
+def admin_delete_advertisement(advertisement_id):
+    ref = db.collection("advertisements").document(advertisement_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Advertisement not found"}), 404
+    ref.delete()
+    return jsonify({"message": "Advertisement deleted"})
+
+
 @app.get("/api/admin/stats")
 @firebase_user_required("admin")
 def admin_stats():
