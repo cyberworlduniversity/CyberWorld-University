@@ -121,6 +121,22 @@ const api = {
     );
   },
 
+  async quizzes() {
+    const data = await apiRequest("/student/quizzes");
+    return data.quizzes || [];
+  },
+
+  async quiz(quizId) {
+    return apiRequest("/student/quizzes/" + encodeURIComponent(quizId));
+  },
+
+  async submitQuiz(quizId, answers) {
+    return apiRequest("/student/quizzes/" + encodeURIComponent(quizId) + "/submit", {
+      method: "POST",
+      body: JSON.stringify({ answers })
+    });
+  },
+
   async adminStats() {
     return apiRequest("/admin/stats");
   }
