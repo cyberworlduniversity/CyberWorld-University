@@ -1,6 +1,7 @@
 import json
 import os
 from functools import wraps
+from datetime import datetime, timezone
 
 import firebase_admin
 from dotenv import load_dotenv
@@ -911,6 +912,19 @@ def student_submit_exam(exam_id):
     if not enrollment_doc: return jsonify({"error": "You must enroll in the course first"}), 403
     progress = int((enrollment_doc.to_dict() or {}).get("progress", 0) or 0); eligibility = int(exam.get("eligibilityProgress", 100) or 100)
     if progress < eligibility: return jsonify({"error": f"Complete at least {eligibility}% of the course before taking this exam"}), 403
+    active_ref = db.collection("exam_attempts").document(f"{uid}_{exam_id}")
+    active = active_ref.get()
+    if not active.exists:
+        return jsonify({"error": "No active examination attempt. Open the exam first."}), 409
+    attempt = active.to_dict() or {}
+    started = attempt.get("startedAt")
+    if not started or not hasattr(started, "timestamp"):
+        return jsonify({"error": "Examination start time is unavailable"}), 409
+    elapsed = datetime.now(timezone.utc).timestamp() - started.timestamp()
+    limit_seconds = max(1, int(exam.get("durationMinutes", 30) or 30)) * 60
+    if elapsed > limit_seconds:
+        active_ref.update({"status": "expired", "submittedAt": firestore.SERVER_TIMESTAMP})
+        return jsonify({"error": "Examination time has expired", "expired": True}), 403
     answers = (request.get_json(silent=True) or {}).get("answers") or {}
     questions = list(db.collection("exam_questions").where("examId", "==", exam_id).where("status", "==", "published").stream())
     total_points = sum(int((q.to_dict() or {}).get("points", 1) or 1) for q in questions); earned = 0; answered = 0
