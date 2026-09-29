@@ -872,15 +872,47 @@ def student_quiz(quiz_id):
     quiz_doc = quiz_exists(quiz_id)
     if not quiz_doc.exists or quiz_doc.to_dict().get("status") != "published":
         return jsonify({"error": "Quiz not found"}), 404
+
     quiz = serialize(quiz_doc)
     if not student_enrollment(quiz.get("courseId"), uid):
         return jsonify({"error": "You must enroll in the course first"}), 403
+
     questions = []
     for doc in db.collection("questions").where("quizId", "==", quiz_id).where("status", "==", "published").stream():
         item = serialize(doc)
         item.pop("correctIndex", None)
         questions.append(item)
+
+    if not questions:
+        return jsonify({"error": "This quiz has no published questions"}), 400
+
+    duration_seconds = max(1, int(quiz.get("durationMinutes", 10) or 10)) * 60
+    attempt_ref = db.collection("quiz_attempts").document(f"{uid}_{quiz_id}")
+    active = attempt_ref.get()
+
+    if active.exists:
+        attempt = active.to_dict() or {}
+        if attempt.get("status") == "in_progress":
+            started = attempt.get("startedAt")
+            if started and hasattr(started, "timestamp"):
+                elapsed = datetime.now(timezone.utc).timestamp() - started.timestamp()
+                if elapsed <= duration_seconds:
+                    return jsonify({"error": "A quiz attempt is already in progress"}), 409
+                attempt_ref.update({"status": "expired", "submittedAt": firestore.SERVER_TIMESTAMP})
+
+    attempt_ref.set({
+        "studentId": uid,
+        "quizId": quiz_id,
+        "courseId": quiz.get("courseId"),
+        "status": "in_progress",
+        "startedAt": firestore.SERVER_TIMESTAMP,
+    })
+
+    attempt = attempt_ref.get().to_dict() or {}
+    started = attempt.get("startedAt")
     quiz["questions"] = questions
+    quiz["serverStartedAt"] = started.isoformat() if started and hasattr(started, "isoformat") else datetime.now(timezone.utc).isoformat()
+    quiz["durationSeconds"] = duration_seconds
     return jsonify({"quiz": quiz})
 
 
@@ -891,9 +923,29 @@ def student_submit_quiz(quiz_id):
     quiz_doc = quiz_exists(quiz_id)
     if not quiz_doc.exists or quiz_doc.to_dict().get("status") != "published":
         return jsonify({"error": "Quiz not found"}), 404
+
     quiz = quiz_doc.to_dict() or {}
     if not student_enrollment(quiz.get("courseId"), uid):
         return jsonify({"error": "You must enroll in the course first"}), 403
+
+    attempt_ref = db.collection("quiz_attempts").document(f"{uid}_{quiz_id}")
+    active = attempt_ref.get()
+    if not active.exists:
+        return jsonify({"error": "No active quiz attempt. Open the quiz first."}), 409
+
+    attempt = active.to_dict() or {}
+    if attempt.get("status") != "in_progress":
+        return jsonify({"error": "Quiz attempt is no longer active"}), 409
+
+    started = attempt.get("startedAt")
+    if not started or not hasattr(started, "timestamp"):
+        return jsonify({"error": "Quiz start time is unavailable"}), 409
+
+    elapsed = datetime.now(timezone.utc).timestamp() - started.timestamp()
+    duration_seconds = max(1, int(quiz.get("durationMinutes", 10) or 10)) * 60
+    if elapsed > duration_seconds:
+        attempt_ref.update({"status": "expired", "submittedAt": firestore.SERVER_TIMESTAMP})
+        return jsonify({"error": "Quiz time has expired", "expired": True}), 403
 
     data = request.get_json(silent=True) or {}
     answers = data.get("answers") or {}
@@ -913,14 +965,12 @@ def student_submit_quiz(quiz_id):
             continue
         if selected == int(item.get("correctIndex", -1)):
             earned += int(item.get("points", 1) or 1)
+
     score = round((earned / total_points) * 100) if total_points else 0
     passed = score >= int(quiz.get("passingScore", 50) or 50)
 
-    attempt_ref = db.collection("quiz_attempts").document()
-    attempt_ref.set({
-        "studentId": uid,
-        "quizId": quiz_id,
-        "courseId": quiz.get("courseId"),
+    attempt_ref.update({
+        "status": "submitted",
         "score": score,
         "earnedPoints": earned,
         "totalPoints": total_points,
@@ -928,6 +978,7 @@ def student_submit_quiz(quiz_id):
         "passed": passed,
         "submittedAt": firestore.SERVER_TIMESTAMP,
     })
+
     return jsonify({
         "message": "Quiz submitted",
         "score": score,
