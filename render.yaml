@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: cyber-world-university-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
