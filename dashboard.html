@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Student Dashboard | CWU</title><link rel="stylesheet" href="css/style.css"></head>
+<body>
+<header class="navbar">
+<a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a>
+<button class="menu-btn" onclick="toggleMenu()">☰</button>
+<nav class="nav-links" id="mainNav"><a href="index.html">Home</a><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a><a href="about.html">About</a><a href="contact.html">Contact</a></nav>
+<div class="nav-actions"><a class="btn btn-outline" href="login.html">Login</a><a class="btn btn-primary" href="register.html">Get Started</a></div>
+</header>
+<main><div class="container dashboard"><aside class="sidebar"><h3>STUDENT</h3><a class="active" href="dashboard.html">Dashboard</a><a href="courses.html">Browse Courses</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a><a href="#" onclick="logout();return false">Logout</a></aside><section class="dash-main"><div class="page-head" style="padding-top:0"><span class="eyebrow">STUDENT DASHBOARD</span><h1>Welcome, <span data-user-name>Student</span></h1></div><div class="dash-cards"><div class="dash-stat"><strong id="statCourses">0</strong><span>Enrolled Courses</span></div><div class="dash-stat"><strong id="statQuizzes">0</strong><span>Quiz Attempts</span></div><div class="dash-stat"><strong id="statCertificates">0</strong><span>Certificates</span></div><div class="dash-stat"><strong>Active</strong><span>Account Status</span></div></div><div class="card"><div class="card-body"><h2>My Courses</h2><div id="studentCourses" class="list" style="margin-top:15px"></div></div></div></section></div></main>
+<footer><div class="container footer-grid"><div><h2>⌬ Cyber World University</h2><p class="muted">Online cybersecurity education and student learning platform.</p></div><div><h3>Platform</h3><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a></div><div><h3>Company</h3><a href="about.html">About</a><a href="contact.html">Contact</a></div><div><h3>Account</h3><a href="login.html">Login</a><a href="register.html">Register</a></div></div><div class="container footer-bottom">© 2026 Cyber World University. All Rights Reserved.</div></footer>
+<div id="toast" class="toast"></div><script src="js/app.js"></script></body></html>
