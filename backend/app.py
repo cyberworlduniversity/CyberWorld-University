@@ -72,6 +72,49 @@ def course_detail(course_id):
         return jsonify({'course':course,'phases':cur.fetchall()})
     finally: cur.close()
 
+@app.post('/api/enrollments')
+@login_required('student')
+def enroll():
+    data=request.get_json(silent=True) or {}
+    try:
+        course_id=int(data.get('course_id'))
+    except (TypeError,ValueError):
+        return jsonify({'error':'Valid course_id is required'}),400
+    cur=mysql.connection.cursor()
+    try:
+        cur.execute("SELECT id,title FROM courses WHERE id=%s AND status='published'",(course_id,))
+        course=cur.fetchone()
+        if not course: return jsonify({'error':'Course not found'}),404
+        cur.execute('SELECT id FROM enrollments WHERE user_id=%s AND course_id=%s',(session['user']['id'],course_id))
+        if cur.fetchone(): return jsonify({'message':'Already enrolled','course':course})
+        cur.execute('INSERT INTO enrollments (user_id,course_id) VALUES (%s,%s)',(session['user']['id'],course_id))
+        mysql.connection.commit()
+        return jsonify({'message':'Enrollment successful','course':course}),201
+    finally: cur.close()
+
+@app.get('/api/student/enrollments')
+@login_required('student')
+def student_enrollments():
+    cur=mysql.connection.cursor()
+    try:
+        cur.execute("""
+            SELECT e.id enrollment_id,c.id course_id,c.title,c.slug,c.thumbnail,c.level,c.duration_minutes,
+                   COUNT(DISTINCT l.id) total_lessons,
+                   COUNT(DISTINCT CASE WHEN sp.completed=1 THEN l.id END) completed_lessons,
+                   CASE WHEN COUNT(DISTINCT l.id)=0 THEN 0
+                        ELSE ROUND(100*COUNT(DISTINCT CASE WHEN sp.completed=1 THEN l.id END)/COUNT(DISTINCT l.id),0) END progress_percent
+            FROM enrollments e
+            JOIN courses c ON c.id=e.course_id
+            LEFT JOIN course_phases p ON p.course_id=c.id AND p.status='published'
+            LEFT JOIN lessons l ON l.phase_id=p.id AND l.status='published'
+            LEFT JOIN student_progress sp ON sp.lesson_id=l.id AND sp.user_id=e.user_id
+            WHERE e.user_id=%s
+            GROUP BY e.id,c.id,c.title,c.slug,c.thumbnail,c.level,c.duration_minutes
+            ORDER BY e.enrolled_at DESC
+        """,(session['user']['id'],))
+        return jsonify({'enrollments':cur.fetchall()})
+    finally: cur.close()
+
 @app.get('/api/admin/stats')
 @login_required('admin')
 def admin_stats():
