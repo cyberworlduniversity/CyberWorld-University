@@ -1,7 +1,193 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Examinations | CWU Admin</title><link rel="stylesheet" href="../css/style.css"></head>
-<body><header class="navbar"><a class="logo" href="../index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>ADMIN PANEL</small></span></a><div class="nav-actions"><a class="btn" href="../index.html">Public Site</a></div></header>
-<div class="admin-shell"><aside class="admin-sidebar"><b>ADMINISTRATION</b><a href="index.html">Dashboard</a><a href="courses.html">Courses</a><a href="videos.html">Videos</a><a href="materials.html">Materials</a><a href="questions.html">Question Bank</a><a href="quizzes.html">Quizzes</a><a class="active" href="exams.html">Examinations</a><a href="certificates.html">Certificates</a><a href="students.html">Students</a></aside>
-<main class="admin-main"><div class="admin-top"><div><span class="eyebrow">FINAL ASSESSMENT</span><h1>Final Examinations</h1><p class="muted">Create an exam, configure eligibility, and publish it for enrolled students.</p></div></div>
-<div id="error" class="notice" hidden></div><div class="card"><div class="card-body"><form id="form" style="display:grid;gap:12px;max-width:700px"><input class="input" id="title" placeholder="Exam title" required><input class="input" id="courseId" placeholder="Course ID" required><textarea class="input" id="description" placeholder="Description"></textarea><div style="display:flex;gap:10px"><input class="input" id="duration" type="number" min="1" value="30" placeholder="Minutes"><input class="input" id="passing" type="number" min="1" max="100" value="50" placeholder="Passing %"><input class="input" id="eligibility" type="number" min="0" max="100" value="100" placeholder="Required progress %"></div><select class="input" id="status"><option value="draft">Draft</option><option value="published">Published</option></select><button class="btn btn-primary">Create Examination</button></form></div></div>
-<div class="card" style="margin-top:20px"><div class="card-body"><h2>Existing Examinations</h2><div class="table-wrap"><table class="table"><thead><tr><th>Title</th><th>Course</th><th>Duration</th><th>Passing</th><th>Eligibility</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div></div></div></main></div>
-<script type="module">import "../js/firebase.js";const $=id=>document.getElementById(id);async function boot(){try{const u=await window.CWU.currentUser();if(!u){location.replace("../login.html?redirect=admin/exams.html");return;}const p=await window.CWU.userProfile(u.uid);if(!p||p.role!=="admin"){location.replace("../dashboard.html");return;}const load=async()=>{const r=await fetch(window.CWU.apiBase+"/admin/exams",{headers:{Authorization:"Bearer "+await u.getIdToken()}});const d=await r.json();if(!r.ok)throw new Error(d.error||"Failed");$("rows").innerHTML=(d.exams||[]).map(e=>'<tr><td>'+e.title+'</td><td>'+e.courseId+'</td><td>'+e.durationMinutes+' min</td><td>'+e.passingScore+'%</td><td>'+e.eligibilityProgress+'%</td><td>'+e.status+'</td></tr>').join("")};$("form").onsubmit=async ev=>{ev.preventDefault();try{const r=await fetch(window.CWU.apiBase+"/admin/exams",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+await u.getIdToken()},body:JSON.stringify({title:$("title").value,courseId:$("courseId").value,description:$("description").value,durationMinutes:Number($("duration").value),passingScore:Number($("passing").value),eligibilityProgress:Number($("eligibility").value),status:$("status").value})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Failed");$("form").reset();$("duration").value=30;$("passing").value=50;$("eligibility").value=100;load();}catch(e){$("error").hidden=false;$("error").textContent=e.message;}};load();}catch(e){$("error").hidden=false;$("error").textContent=e.message;}}boot();</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Examinations | CWU Admin</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<header class="navbar">
+  <a class="logo" href="../index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>ADMIN PANEL</small></span></a>
+  <div class="nav-actions"><a class="btn" href="../index.html">Public Site</a></div>
+</header>
+
+<div class="admin-shell">
+<aside class="admin-sidebar">
+  <b>ADMINISTRATION</b>
+  <a href="index.html">Dashboard</a><a href="courses.html">Courses</a><a href="videos.html">Videos</a>
+  <a href="materials.html">Materials</a><a href="questions.html">Question Bank</a><a href="quizzes.html">Quizzes</a>
+  <a class="active" href="exams.html">Examinations</a><a href="certificates.html">Certificates</a><a href="students.html">Students</a>
+</aside>
+
+<main class="admin-main">
+  <div class="admin-top">
+    <div><span class="eyebrow">FINAL ASSESSMENT</span><h1>Final Examinations</h1>
+    <p class="muted">Create exams, add MCQ questions, publish them, and manage the final assessment.</p></div>
+  </div>
+
+  <div id="error" class="notice" hidden></div>
+  <div id="success" class="notice" hidden></div>
+
+  <div class="card">
+    <div class="card-body">
+      <h2>Create Examination</h2>
+      <form id="examForm" style="display:grid;gap:12px;max-width:760px">
+        <input class="input" id="title" placeholder="Exam title" required>
+        <input class="input" id="courseId" placeholder="Course ID" required>
+        <textarea class="input" id="description" placeholder="Description"></textarea>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <input class="input" id="duration" style="flex:1;min-width:150px" type="number" min="1" value="30" placeholder="Minutes">
+          <input class="input" id="passing" style="flex:1;min-width:150px" type="number" min="1" max="100" value="50" placeholder="Passing %">
+          <input class="input" id="eligibility" style="flex:1;min-width:150px" type="number" min="0" max="100" value="100" placeholder="Required progress %">
+        </div>
+        <select class="input" id="status"><option value="draft">Draft</option><option value="published">Published</option></select>
+        <button class="btn btn-primary">Create Examination</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-body">
+      <h2>Existing Examinations</h2>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Title</th><th>Course</th><th>Duration</th><th>Passing</th><th>Eligibility</th><th>Status</th><th>Questions</th></tr></thead>
+      <tbody id="rows"></tbody></table></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-body">
+      <h2>Exam Question Manager</h2>
+      <p class="muted">Select an examination, then add and manage its multiple-choice questions.</p>
+      <form id="questionForm" style="display:grid;gap:12px;max-width:760px">
+        <select class="input" id="examSelect" required><option value="">Select examination</option></select>
+        <textarea class="input" id="question" placeholder="Question text" required></textarea>
+        <input class="input" id="option0" placeholder="Option A" required>
+        <input class="input" id="option1" placeholder="Option B" required>
+        <input class="input" id="option2" placeholder="Option C (optional)">
+        <input class="input" id="option3" placeholder="Option D (optional)">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <select class="input" id="correctIndex" style="flex:1;min-width:180px">
+            <option value="0">Correct answer: A</option><option value="1">Correct answer: B</option>
+            <option value="2">Correct answer: C</option><option value="3">Correct answer: D</option>
+          </select>
+          <input class="input" id="points" style="flex:1;min-width:120px" type="number" min="1" value="1" placeholder="Points">
+          <select class="input" id="questionStatus" style="flex:1;min-width:150px"><option value="draft">Draft</option><option value="published">Published</option></select>
+        </div>
+        <button class="btn btn-primary">Add Question</button>
+      </form>
+      <div class="table-wrap" style="margin-top:20px"><table class="table"><thead><tr><th>#</th><th>Question</th><th>Options</th><th>Answer</th><th>Points</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody id="questionRows"><tr><td colspan="7" class="muted">Select an examination to load questions.</td></tr></tbody></table></div>
+    </div>
+  </div>
+</main>
+</div>
+
+<script type="module">
+import "../js/firebase.js";
+
+const $ = id => document.getElementById(id);
+let currentUser = null;
+let exams = [];
+
+function show(id, message) {
+  $(id).hidden = !message;
+  $(id).textContent = message || "";
+}
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c]));
+}
+async function authHeaders() {
+  return { "Content-Type":"application/json", Authorization:"Bearer " + await currentUser.getIdToken() };
+}
+async function api(path, options={}) {
+  const response = await fetch(window.CWU.apiBase + path, { ...options, headers:{ ...(options.headers||{}), ...(await authHeaders()) } });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+async function loadExams() {
+  const data = await api("/admin/exams");
+  exams = data.exams || [];
+  $("rows").innerHTML = exams.length ? exams.map(e => {
+    const count = e.questionCount ?? "—";
+    return '<tr><td>'+esc(e.title)+'</td><td>'+esc(e.courseId)+'</td><td>'+e.durationMinutes+' min</td><td>'+e.passingScore+'%</td><td>'+e.eligibilityProgress+'%</td><td>'+esc(e.status)+'</td><td><button class="btn" data-select-exam="'+esc(e.id)+'">Manage ('+count+')</button></td></tr>';
+  }).join("") : '<tr><td colspan="7" class="muted">No examinations created yet.</td></tr>';
+  $("examSelect").innerHTML = '<option value="">Select examination</option>' + exams.map(e => '<option value="'+esc(e.id)+'">'+esc(e.title)+' — '+esc(e.courseId)+'</option>').join("");
+}
+async function loadQuestions(examId) {
+  if (!examId) {
+    $("questionRows").innerHTML = '<tr><td colspan="7" class="muted">Select an examination to load questions.</td></tr>';
+    return;
+  }
+  const data = await api("/admin/exams/" + encodeURIComponent(examId) + "/questions");
+  const questions = data.questions || [];
+  $("questionRows").innerHTML = questions.length ? questions.map((q,i) => {
+    const opts = (q.options || []).map((o,index) => String.fromCharCode(65+index)+". "+o).join("<br>");
+    const answer = String.fromCharCode(65 + Number(q.correctIndex || 0));
+    return '<tr><td>'+(i+1)+'</td><td>'+esc(q.question)+'</td><td>'+opts+'</td><td>'+answer+'</td><td>'+q.points+'</td><td>'+esc(q.status)+'</td><td><button class="btn" data-delete-question="'+esc(q.id)+'">Delete</button></td></tr>';
+  }).join("") : '<tr><td colspan="7" class="muted">No questions yet. Add the first question above.</td></tr>';
+}
+
+async function boot() {
+  try {
+    currentUser = await window.CWU.currentUser();
+    if (!currentUser) { location.replace("../login.html?redirect=admin/exams.html"); return; }
+    const profile = await window.CWU.userProfile(currentUser.uid);
+    if (!profile || profile.role !== "admin") { location.replace("../dashboard.html"); return; }
+
+    await loadExams();
+
+    $("examForm").onsubmit = async ev => {
+      ev.preventDefault(); show("error",""); show("success","");
+      try {
+        await api("/admin/exams", { method:"POST", body:JSON.stringify({
+          title:$("title").value, courseId:$("courseId").value, description:$("description").value,
+          durationMinutes:Number($("duration").value), passingScore:Number($("passing").value),
+          eligibilityProgress:Number($("eligibility").value), status:$("status").value
+        })});
+        $("examForm").reset(); $("duration").value=30; $("passing").value=50; $("eligibility").value=100;
+        show("success","Examination created successfully."); await loadExams();
+      } catch(e) { show("error",e.message); }
+    };
+
+    $("questionForm").onsubmit = async ev => {
+      ev.preventDefault(); show("error",""); show("success","");
+      try {
+        const options = [$("option0").value,$("option1").value,$("option2").value,$("option3").value].map(v=>v.trim()).filter(Boolean);
+        const correct = Number($("correctIndex").value);
+        if (correct >= options.length) throw new Error("Choose a correct answer that exists in the filled options.");
+        await api("/admin/exam-questions", { method:"POST", body:JSON.stringify({
+          examId:$("examSelect").value, question:$("question").value, options,
+          correctIndex:correct, points:Number($("points").value), status:$("questionStatus").value
+        })});
+        $("question").value=""; $("option0").value=""; $("option1").value=""; $("option2").value=""; $("option3").value="";
+        $("points").value=1; $("correctIndex").value="0"; $("questionStatus").value="draft";
+        show("success","Exam question added successfully."); await loadQuestions($("examSelect").value);
+      } catch(e) { show("error",e.message); }
+    };
+
+    $("examSelect").onchange = () => loadQuestions($("examSelect").value).catch(e => show("error",e.message));
+
+    $("rows").onclick = ev => {
+      const button = ev.target.closest("[data-select-exam]");
+      if (!button) return;
+      $("examSelect").value = button.dataset.selectExam;
+      $("examSelect").scrollIntoView({ behavior:"smooth", block:"center" });
+      loadQuestions(button.dataset.selectExam).catch(e => show("error",e.message));
+    };
+
+    $("questionRows").onclick = async ev => {
+      const button = ev.target.closest("[data-delete-question]");
+      if (!button) return;
+      if (!confirm("Delete this exam question?")) return;
+      try {
+        await api("/admin/exam-questions/" + encodeURIComponent(button.dataset.deleteQuestion), { method:"DELETE" });
+        show("success","Question deleted."); await loadQuestions($("examSelect").value);
+      } catch(e) { show("error",e.message); }
+    };
+  } catch(e) { show("error",e.message); }
+}
+boot();
+</script>
+</body>
+</html>
