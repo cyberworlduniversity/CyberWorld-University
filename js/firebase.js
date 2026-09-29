@@ -109,6 +109,18 @@ const api = {
     return data.enrollments || [];
   },
 
+  async studentCourse(courseId) {
+    return apiRequest("/student/courses/" + encodeURIComponent(courseId));
+  },
+
+  async completeLesson(courseId, lessonId) {
+    return apiRequest(
+      "/student/courses/" + encodeURIComponent(courseId) +
+      "/lessons/" + encodeURIComponent(lessonId) + "/complete",
+      { method: "POST", body: JSON.stringify({}) }
+    );
+  },
+
   async adminStats() {
     return apiRequest("/admin/stats");
   }
