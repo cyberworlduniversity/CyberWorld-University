@@ -967,6 +967,36 @@ def student_submit_exam(exam_id):
     return jsonify({"message": "Final examination submitted", "score": score, "passed": passed,
                     "earnedPoints": earned, "totalPoints": total_points, "answered": answered, "certificate": certificate})
 
+@app.get("/api/admin/certificates")
+@firebase_user_required("admin")
+def admin_certificates():
+    docs = db.collection("certificates").order_by("issuedAt", direction=firestore.Query.DESCENDING).stream()
+    return jsonify({"certificates": [serialize(doc) for doc in docs]})
+
+@app.put("/api/admin/certificates/<certificate_id>")
+@firebase_user_required("admin")
+def admin_update_certificate(certificate_id):
+    ref = db.collection("certificates").document(certificate_id)
+    doc = ref.get()
+    if not doc.exists:
+        return jsonify({"error": "Certificate not found"}), 404
+    data = admin_payload()
+    status = str(data.get("status", "")).strip().lower()
+    if status not in {"issued", "revoked"}:
+        return jsonify({"error": "status must be issued or revoked"}), 400
+    ref.update({"status": status, "updatedAt": firestore.SERVER_TIMESTAMP})
+    return jsonify({"certificate": serialize(ref.get())})
+
+@app.delete("/api/admin/certificates/<certificate_id>")
+@firebase_user_required("admin")
+def admin_delete_certificate(certificate_id):
+    ref = db.collection("certificates").document(certificate_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Certificate not found"}), 404
+    ref.delete()
+    return jsonify({"message": "Certificate deleted"})
+
+
 @app.get("/api/student/certificates")
 @firebase_user_required("student")
 def student_certificates():
