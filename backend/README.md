@@ -6,6 +6,7 @@ This directory contains the Python 3 backend API for Cyber World University.
 
 - Python 3
 - Flask
+- Gunicorn
 - Firebase Admin SDK
 - Firebase Authentication
 - Cloud Firestore
@@ -51,24 +52,26 @@ The API verifies Firebase ID tokens from the frontend. Protected requests must s
 
 The remaining admin CRUD endpoints will be migrated from the legacy MySQL implementation to Firestore in the next phase.
 
-
 ## Render deployment
 
-Create a Render Web Service connected to this repository.
+The repository root contains `render.yaml`, which defines the Render Web Service.
 
-Recommended settings:
+Render settings:
 
-- Language: Python 3
-- Branch: cwu-flask-mysql-foundation (until the backend is merged into main)
-- Root Directory: backend
-- Build Command: pip install -r requirements.txt
-- Start Command: gunicorn app:app
-- Health check path: /api/health
+- Language/runtime: Python 3
+- Branch: `cwu-flask-mysql-foundation` until these backend changes are merged into `main`
+- Root Directory: `backend`
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `gunicorn --bind 0.0.0.0:$PORT app:app`
+- Health check path: `/api/health`
+- Plan: Free for initial testing
 
-Set these environment variables in Render:
+Required Render secret:
 
-- FLASK_DEBUG=false
-- PORT=10000
-- FIREBASE_SERVICE_ACCOUNT_JSON=<the complete Firebase service-account JSON>
+- `FIREBASE_SERVICE_ACCOUNT_JSON` — complete Firebase/Google service-account JSON
 
-Never commit the Firebase service-account JSON to GitHub. Store it only as a protected Render environment variable.
+The Blueprint marks this secret with `sync: false`, so Render will prompt for it rather than storing its value in Git.
+
+Do not commit the service-account JSON or private key to GitHub.
+
+Render supplies the `PORT` environment variable at runtime; the Gunicorn command binds to `0.0.0.0:$PORT`.
