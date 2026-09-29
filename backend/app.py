@@ -197,6 +197,159 @@ def student_enrollments():
     return jsonify({"enrollments": result})
 
 
+
+def admin_payload():
+    return request.get_json(silent=True) or {}
+
+
+def required_text(data, key):
+    value = str(data.get(key, "")).strip()
+    if not value:
+        raise ValueError(f"{key} is required")
+    return value
+
+
+def course_data(data, existing=None):
+    existing = existing or {}
+    title = required_text(data, "title")
+    category = required_text(data, "category")
+    slug = str(data.get("slug") or title).strip().lower()
+    slug = "".join(ch if ch.isalnum() or ch == " " else "-" for ch in slug).replace(" ", "-")
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    payload = {
+        "title": title,
+        "slug": slug.strip("-"),
+        "category": category,
+        "level": str(data.get("level", "Beginner")).strip() or "Beginner",
+        "instructor": str(data.get("instructor", "CWU Academy")).strip() or "CWU Academy",
+        "description": str(data.get("description", "")).strip(),
+        "objectives": str(data.get("objectives", "")).strip(),
+        "requirements": str(data.get("requirements", "")).strip(),
+        "durationMinutes": int(data.get("durationMinutes", data.get("duration", 0)) or 0),
+        "price": str(data.get("price", "Free")).strip() or "Free",
+        "thumbnail": str(data.get("thumbnail", "")).strip(),
+        "status": str(data.get("status", existing.get("status", "draft"))).strip().lower(),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    if payload["status"] not in {"draft", "published"}:
+        raise ValueError("status must be draft or published")
+    return payload
+
+
+@app.get("/api/admin/courses")
+@firebase_user_required("admin")
+def admin_courses():
+    docs = db.collection("courses").order_by("createdAt", direction=firestore.Query.DESCENDING).stream()
+    return jsonify({"courses": [serialize(doc) for doc in docs]})
+
+
+@app.post("/api/admin/courses")
+@firebase_user_required("admin")
+def admin_create_course():
+    data = admin_payload()
+    try:
+        payload = course_data(data)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid course data"}), 400
+    payload["createdAt"] = firestore.SERVER_TIMESTAMP
+    payload["createdBy"] = request.cwu_user["uid"]
+    ref = db.collection("courses").document()
+    ref.set(payload)
+    return jsonify({"course": serialize(ref.get())}), 201
+
+
+@app.put("/api/admin/courses/<course_id>")
+@firebase_user_required("admin")
+def admin_update_course(course_id):
+    ref = db.collection("courses").document(course_id)
+    doc = ref.get()
+    if not doc.exists:
+        return jsonify({"error": "Course not found"}), 404
+    try:
+        payload = course_data(admin_payload(), doc.to_dict())
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid course data"}), 400
+    ref.update(payload)
+    return jsonify({"course": serialize(ref.get())})
+
+
+@app.delete("/api/admin/courses/<course_id>")
+@firebase_user_required("admin")
+def admin_delete_course(course_id):
+    ref = db.collection("courses").document(course_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Course not found"}), 404
+    ref.delete()
+    return jsonify({"message": "Course deleted"})
+
+
+@app.get("/api/admin/courses/<course_id>/phases")
+@firebase_user_required("admin")
+def admin_course_phases(course_id):
+    if not db.collection("courses").document(course_id).get().exists:
+        return jsonify({"error": "Course not found"}), 404
+    docs = db.collection("course_phases").where("courseId", "==", course_id).order_by("sortOrder").stream()
+    return jsonify({"phases": [serialize(doc) for doc in docs]})
+
+
+@app.post("/api/admin/courses/<course_id>/phases")
+@firebase_user_required("admin")
+def admin_create_phase(course_id):
+    if not db.collection("courses").document(course_id).get().exists:
+        return jsonify({"error": "Course not found"}), 404
+    data = admin_payload()
+    try:
+        title = required_text(data, "title")
+        sort_order = int(data.get("sortOrder", 1))
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid phase data"}), 400
+    ref = db.collection("course_phases").document()
+    ref.set({
+        "courseId": course_id,
+        "title": title,
+        "description": str(data.get("description", "")).strip(),
+        "sortOrder": sort_order,
+        "status": str(data.get("status", "draft")).strip().lower(),
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    return jsonify({"phase": serialize(ref.get())}), 201
+
+
+@app.put("/api/admin/phases/<phase_id>")
+@firebase_user_required("admin")
+def admin_update_phase(phase_id):
+    ref = db.collection("course_phases").document(phase_id)
+    doc = ref.get()
+    if not doc.exists:
+        return jsonify({"error": "Phase not found"}), 404
+    data = admin_payload()
+    try:
+        title = required_text(data, "title")
+        sort_order = int(data.get("sortOrder", 1))
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid phase data"}), 400
+    ref.update({
+        "title": title,
+        "description": str(data.get("description", "")).strip(),
+        "sortOrder": sort_order,
+        "status": str(data.get("status", "draft")).strip().lower(),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    return jsonify({"phase": serialize(ref.get())})
+
+
+@app.delete("/api/admin/phases/<phase_id>")
+@firebase_user_required("admin")
+def admin_delete_phase(phase_id):
+    ref = db.collection("course_phases").document(phase_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Phase not found"}), 404
+    ref.delete()
+    return jsonify({"message": "Phase deleted"})
+
+
 @app.get("/api/admin/stats")
 @firebase_user_required("admin")
 def admin_stats():
