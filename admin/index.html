@@ -1,1 +1,35 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard | CWU Admin</title><link rel="stylesheet" href="../css/style.css"></head><body ><header class="navbar"><a class="logo" href="../index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>ADMIN PANEL</small></span></a><div class="nav-actions"><a class="btn" href="../index.html">Public Site</a><button class="btn btn-danger" onclick="logout()">Logout</button></div></header><div class="admin-shell"><aside class="admin-sidebar"><b>ADMINISTRATION</b><a href="index.html">Dashboard</a><a href="courses.html">Courses</a><a href="videos.html">Videos</a><a href="materials.html">Materials</a><a href="questions.html">Question Bank</a><a href="quizzes.html">Quizzes</a><a href="exams.html">Examinations</a><a href="certificates.html">Certificates</a><a href="advertisements.html">Advertisements</a><a href="students.html">Students</a><a href="settings.html">Website Content</a></aside><main class="admin-main"><div class="admin-top"><div><span class="eyebrow">CONTROL CENTER</span><h1>Admin Dashboard</h1></div><a class="btn btn-primary" href="courses.html">+ Add Course</a></div><div class="admin-stat-grid"><div class="dash-stat"><strong id="adminStudents">0</strong><span>Students</span></div><div class="dash-stat"><strong id="adminCourses">0</strong><span>Courses</span></div><div class="dash-stat"><strong id="adminLessons">0</strong><span>Lessons</span></div><div class="dash-stat"><strong id="adminVideos">0</strong><span>Videos</span></div><div class="dash-stat"><strong id="adminMaterials">0</strong><span>Materials</span></div><div class="dash-stat"><strong id="adminQuestions">0</strong><span>Questions</span></div><div class="dash-stat"><strong id="adminQuizzes">0</strong><span>Quizzes</span></div><div class="dash-stat"><strong id="adminCertificates">0</strong><span>Certificates</span></div></div><div class="card"><div class="card-body"><h2>Course workflow</h2><p class="muted">Create courses → add phases and lessons → upload videos/materials → build 100+ questions → configure quizzes/exams → publish.</p></div></div></main></div><div id="toast" class="toast"></div><script src="../js/app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard | CWU Admin</title><link rel="stylesheet" href="../css/style.css"></head>
+<body>
+<header class="navbar"><a class="logo" href="../index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>ADMIN PANEL</small></span></a><div class="nav-actions"><a class="btn" href="../index.html">Public Site</a><button class="btn btn-danger" id="logoutBtn">Logout</button></div></header>
+<div class="admin-shell"><aside class="admin-sidebar"><b>ADMINISTRATION</b><a class="active" href="index.html">Dashboard</a><a href="courses.html">Courses</a><a href="videos.html">Videos</a><a href="materials.html">Materials</a><a href="questions.html">Question Bank</a><a href="quizzes.html">Quizzes</a><a href="exams.html">Examinations</a><a href="certificates.html">Certificates</a><a href="advertisements.html">Advertisements</a><a href="students.html">Students</a><a href="settings.html">Website Content</a></aside>
+<main class="admin-main">
+<div class="admin-top"><div><span class="eyebrow">SECURE CONTROL CENTER</span><h1>Admin Dashboard</h1><p class="muted" id="adminWelcome">Verifying administrator access...</p></div><a class="btn btn-primary" href="courses.html">+ Add Course</a></div>
+<div id="adminError" class="notice" hidden></div>
+<div class="admin-stat-grid">
+<div class="dash-stat"><strong id="adminStudents">—</strong><span>Students</span></div><div class="dash-stat"><strong id="adminCourses">—</strong><span>Courses</span></div><div class="dash-stat"><strong id="adminLessons">—</strong><span>Lessons</span></div><div class="dash-stat"><strong id="adminVideos">—</strong><span>Videos</span></div><div class="dash-stat"><strong id="adminMaterials">—</strong><span>Materials</span></div><div class="dash-stat"><strong id="adminQuestions">—</strong><span>Questions</span></div><div class="dash-stat"><strong id="adminQuizzes">—</strong><span>Quizzes</span></div><div class="dash-stat"><strong id="adminCertificates">—</strong><span>Certificates</span></div></div>
+<div class="card"><div class="card-body"><h2>Course workflow</h2><p class="muted">Create courses → add phases and lessons → upload videos/materials → build questions → configure quizzes/exams → publish.</p></div></div>
+</main></div><div id="toast" class="toast"></div>
+<script type="module">
+import "../js/firebase.js";
+const $=id=>document.getElementById(id);
+const set=(id,v)=>$(id).textContent=String(v ?? 0);
+async function boot(){
+ try{
+   const user=await window.CWU.currentUser();
+   if(!user){ location.replace("../login.html?redirect=admin"); return; }
+   const profile=await window.CWU.userProfile(user.uid);
+   if(!profile || profile.role!=="admin"){ $("adminError").hidden=false; $("adminError").textContent="Access denied. An administrator account is required."; setTimeout(()=>location.replace("../dashboard.html"),1200); return; }
+   $("adminWelcome").textContent="Signed in as "+(profile.name || user.email || "Administrator");
+   const stats=await window.CWU.adminStats();
+   set("adminStudents",Math.max(0,(stats.users||0)-(stats.admins||0)));
+   set("adminCourses",stats.courses); set("adminLessons",stats.lessons); set("adminVideos",stats.videos);
+   set("adminMaterials",stats.materials); set("adminQuestions",stats.questions); set("adminQuizzes",stats.quizzes); set("adminCertificates",stats.certificates);
+ }catch(error){
+   $("adminError").hidden=false; $("adminError").textContent="Unable to load admin dashboard: "+error.message;
+ }
+}
+$("logoutBtn").addEventListener("click",async()=>{await window.CWU.logout();location.replace("../login.html");});
+boot();
+</script></body></html>
