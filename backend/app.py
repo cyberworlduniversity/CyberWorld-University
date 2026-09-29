@@ -201,7 +201,6 @@ def student_enrollments():
 @firebase_user_required("admin")
 def admin_stats():
     collections = [
-        "users",
         "courses",
         "course_phases",
         "lessons",
@@ -213,9 +212,9 @@ def admin_stats():
         "certificates",
         "advertisements",
     ]
-    stats = {}
-    for name in collections:
-        stats[name] = len(list(db.collection(name).stream()))
+    stats = {name: len(list(db.collection(name).stream())) for name in collections}
+    stats["students"] = len(list(db.collection("users").where("role", "==", "student").stream()))
+    stats["admins"] = len(list(db.collection("users").where("role", "==", "admin").stream()))
     return jsonify(stats)
 
 
