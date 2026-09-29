@@ -1,1 +1,87 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Students | CWU Admin</title><link rel="stylesheet" href="../css/style.css"></head><body data-admin-table="students"><header class="navbar"><a class="logo" href="../index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>ADMIN PANEL</small></span></a><a class="btn" href="../index.html">Public Site</a></header><div class="admin-shell"><aside class="admin-sidebar"><a href="index.html">Dashboard</a><a href="courses.html">Courses</a><a href="videos.html">Videos</a><a href="materials.html">Materials</a><a href="questions.html">Questions</a><a href="quizzes.html">Quizzes</a><a href="exams.html">Exams</a><a href="certificates.html">Certificates</a><a href="advertisements.html">Ads</a><a href="students.html">Students</a><a href="settings.html">Settings</a></aside><main class="admin-main"><h1>Student Management</h1><div class="card card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody id="genericRows"></tbody></table></div></div></main></div><script src="../js/app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Students | CWU Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<header class="navbar">
+  <a class="logo" href="../index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>ADMIN PANEL</small></span></a>
+  <div class="nav-actions">
+    <a class="btn" href="../index.html">Public Site</a>
+    <button class="btn btn-danger" id="logout">Logout</button>
+  </div>
+</header>
+<div class="admin-shell">
+  <aside class="admin-sidebar">
+    <a href="index.html">Dashboard</a><a href="courses.html">Courses</a><a href="videos.html">Videos</a>
+    <a href="materials.html">Materials</a><a href="questions.html">Questions</a><a href="quizzes.html">Quizzes</a>
+    <a href="exams.html">Exams</a><a href="certificates.html">Certificates</a><a href="advertisements.html">Ads</a>
+    <a href="students.html">Students</a><a href="settings.html">Settings</a>
+  </aside>
+  <main class="admin-main">
+    <h1>Student Management</h1>
+    <p class="muted">Students registered through Firebase Authentication and stored in Firestore.</p>
+    <div class="card card-body">
+      <div class="form-grid">
+        <div class="field full"><label>Search students</label><input id="search" class="input" placeholder="Search by name or email"></div>
+      </div>
+      <div id="message" class="muted" style="margin:12px 0"></div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Registered</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+<script type="module">
+import "../js/firebase.js";
+const rows=document.getElementById("rows"), search=document.getElementById("search"), message=document.getElementById("message");
+let students=[];
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+function render(){
+  const q=search.value.trim().toLowerCase();
+  const list=students.filter(s=>(s.name||"").toLowerCase().includes(q)||(s.email||"").toLowerCase().includes(q));
+  rows.innerHTML=list.map(s=>`<tr><td>${esc(s.name||"—")}</td><td>${esc(s.email||"—")}</td><td>${esc(s.role||"student")}</td><td>${esc(s.status||"active")}</td><td>${esc(formatDate(s.createdAt))}</td></tr>`).join("")||'<tr><td colspan="5">No students found.</td></tr>';
+}
+function formatDate(value){
+  if(!value) return "—";
+  if(typeof value==="string") return new Date(value).toLocaleDateString();
+  if(typeof value==="object" && value._seconds) return new Date(value._seconds*1000).toLocaleDateString();
+  return "—";
+}
+async function api(path){
+  const u=await window.CWU.currentUser();
+  if(!u) throw Error("Admin login required");
+  const token=await u.getIdToken();
+  const r=await fetch(window.CWU.apiBase+path,{headers:{Authorization:"Bearer "+token}});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw Error(d.error||"Request failed");
+  return d;
+}
+async function load(){
+  try{
+    message.textContent="Loading students…";
+    const data=await api("/admin/students");
+    students=data.students||[];
+    message.textContent=students.length+" student"+(students.length===1?"":"s")+" found";
+    render();
+  }catch(e){message.textContent=e.message;rows.innerHTML='<tr><td colspan="5">Unable to load students.</td></tr>';}
+}
+search.addEventListener("input",render);
+document.getElementById("logout").onclick=async()=>{await window.CWU.logout();location.href="../login.html"};
+const u=await window.CWU.currentUser();
+if(!u) location.href="../login.html?redirect=admin/students";
+else {
+  const p=await window.CWU.userProfile();
+  if(!p||p.role!=="admin") location.href="../dashboard.html";
+  else load();
+}
+</script>
+</body>
+</html>
