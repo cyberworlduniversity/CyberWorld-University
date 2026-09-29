@@ -23,7 +23,7 @@ async function boot(){
    if(!profile || profile.role!=="admin"){ $("adminError").hidden=false; $("adminError").textContent="Access denied. An administrator account is required."; setTimeout(()=>location.replace("../dashboard.html"),1200); return; }
    $("adminWelcome").textContent="Signed in as "+(profile.name || user.email || "Administrator");
    const stats=await window.CWU.adminStats();
-   set("adminStudents",Math.max(0,(stats.users||0)-(stats.admins||0)));
+   set("adminStudents",stats.students);
    set("adminCourses",stats.courses); set("adminLessons",stats.lessons); set("adminVideos",stats.videos);
    set("adminMaterials",stats.materials); set("adminQuestions",stats.questions); set("adminQuizzes",stats.quizzes); set("adminCertificates",stats.certificates);
  }catch(error){
