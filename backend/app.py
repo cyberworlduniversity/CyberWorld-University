@@ -428,6 +428,175 @@ def admin_delete_lesson(lesson_id):
     return jsonify({"message": "Lesson deleted"})
 
 
+
+def student_enrollment(course_id, uid):
+    docs = (
+        db.collection("enrollments")
+        .where("studentId", "==", uid)
+        .where("courseId", "==", course_id)
+        .limit(1)
+        .stream()
+    )
+    return next(docs, None)
+
+
+def published_course_content(course_id):
+    phases = (
+        db.collection("course_phases")
+        .where("courseId", "==", course_id)
+        .where("status", "==", "published")
+        .order_by("sortOrder")
+        .stream()
+    )
+    result = []
+    for phase_doc in phases:
+        phase = serialize(phase_doc)
+        lessons = (
+            db.collection("lessons")
+            .where("phaseId", "==", phase_doc.id)
+            .where("status", "==", "published")
+            .order_by("sortOrder")
+            .stream()
+        )
+        phase["lessons"] = []
+        for lesson_doc in lessons:
+            lesson = serialize(lesson_doc)
+            videos = (
+                db.collection("videos")
+                .where("lessonId", "==", lesson_doc.id)
+                .where("status", "==", "published")
+                .order_by("sortOrder")
+                .stream()
+            )
+            materials = (
+                db.collection("materials")
+                .where("lessonId", "==", lesson_doc.id)
+                .where("status", "==", "published")
+                .order_by("sortOrder")
+                .stream()
+            )
+            lesson["videos"] = [serialize(doc) for doc in videos]
+            lesson["materials"] = [serialize(doc) for doc in materials]
+            phase["lessons"].append(lesson)
+        result.append(phase)
+    return result
+
+
+@app.get("/api/student/courses/<course_id>")
+@firebase_user_required("student")
+def student_course(course_id):
+    uid = request.cwu_user["uid"]
+    enrollment_doc = student_enrollment(course_id, uid)
+    if not enrollment_doc:
+        return jsonify({"error": "You must enroll in this course first"}), 403
+
+    course_doc = db.collection("courses").document(course_id).get()
+    if not course_doc.exists or course_doc.to_dict().get("status") != "published":
+        return jsonify({"error": "Course not found"}), 404
+
+    course = serialize(course_doc)
+    course["phases"] = published_course_content(course_id)
+
+    progress_docs = (
+        db.collection("lesson_progress")
+        .where("studentId", "==", uid)
+        .where("courseId", "==", course_id)
+        .stream()
+    )
+    progress = {doc.to_dict().get("lessonId"): serialize(doc) for doc in progress_docs}
+
+    total_lessons = sum(len(phase["lessons"]) for phase in course["phases"])
+    completed_lessons = sum(
+        1 for lesson_id, item in progress.items()
+        if item.get("completed") is True
+    )
+    percentage = round((completed_lessons / total_lessons) * 100) if total_lessons else 0
+
+    course["progress"] = percentage
+    course["completedLessons"] = completed_lessons
+    course["totalLessons"] = total_lessons
+
+    for phase in course["phases"]:
+        for lesson in phase["lessons"]:
+            item = progress.get(lesson["id"], {})
+            lesson["completed"] = item.get("completed", False)
+
+    return jsonify({"course": course})
+
+
+@app.post("/api/student/courses/<course_id>/lessons/<lesson_id>/complete")
+@firebase_user_required("student")
+def complete_student_lesson(course_id, lesson_id):
+    uid = request.cwu_user["uid"]
+    enrollment_doc = student_enrollment(course_id, uid)
+    if not enrollment_doc:
+        return jsonify({"error": "You must enroll in this course first"}), 403
+
+    lesson_doc = db.collection("lessons").document(lesson_id).get()
+    if not lesson_doc.exists:
+        return jsonify({"error": "Lesson not found"}), 404
+
+    lesson = lesson_doc.to_dict() or {}
+    if lesson.get("status") != "published":
+        return jsonify({"error": "Lesson not found"}), 404
+
+    phase_doc = db.collection("course_phases").document(lesson.get("phaseId", "")).get()
+    if not phase_doc.exists or phase_doc.to_dict().get("courseId") != course_id:
+        return jsonify({"error": "Lesson does not belong to this course"}), 400
+
+    progress_ref = (
+        db.collection("lesson_progress")
+        .document(f"{uid}_{course_id}_{lesson_id}")
+    )
+    progress_ref.set({
+        "studentId": uid,
+        "courseId": course_id,
+        "lessonId": lesson_id,
+        "completed": True,
+        "completedAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }, merge=True)
+
+    total = 0
+    completed = 0
+    phases = (
+        db.collection("course_phases")
+        .where("courseId", "==", course_id)
+        .where("status", "==", "published")
+        .stream()
+    )
+    for phase in phases:
+        lessons = (
+            db.collection("lessons")
+            .where("phaseId", "==", phase.id)
+            .where("status", "==", "published")
+            .stream()
+        )
+        for lesson_item in lessons:
+            total += 1
+            progress_item = (
+                db.collection("lesson_progress")
+                .document(f"{uid}_{course_id}_{lesson_item.id}")
+                .get()
+            )
+            if progress_item.exists and (progress_item.to_dict() or {}).get("completed") is True:
+                completed += 1
+
+    percentage = round((completed / total) * 100) if total else 0
+    db.collection("enrollments").document(enrollment_doc.id).update({
+        "progress": percentage,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+
+    return jsonify({
+        "message": "Lesson marked complete",
+        "progress": percentage,
+        "completedLessons": completed,
+        "totalLessons": total,
+    })
+
+
+
 @app.get("/api/admin/stats")
 @firebase_user_required("admin")
 def admin_stats():
