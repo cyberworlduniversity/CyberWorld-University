@@ -150,6 +150,24 @@ const api = {
     return data.certificates || [];
   },
 
+  async adminCertificates() {
+    const data = await apiRequest("/admin/certificates");
+    return data.certificates || [];
+  },
+
+  async updateCertificate(certificateId, status) {
+    return apiRequest("/admin/certificates/" + encodeURIComponent(certificateId), {
+      method: "PUT",
+      body: JSON.stringify({ status })
+    });
+  },
+
+  async deleteCertificate(certificateId) {
+    return apiRequest("/admin/certificates/" + encodeURIComponent(certificateId), {
+      method: "DELETE"
+    });
+  },
+
   async submitQuiz(quizId, answers) {
     return apiRequest("/student/quizzes/" + encodeURIComponent(quizId) + "/submit", {
       method: "POST",
