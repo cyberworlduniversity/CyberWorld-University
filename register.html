@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Registration | CWU</title><link rel="stylesheet" href="css/style.css"></head>
+<body>
+<header class="navbar">
+<a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a>
+<button class="menu-btn" onclick="toggleMenu()">☰</button>
+<nav class="nav-links" id="mainNav"><a href="index.html">Home</a><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a><a href="about.html">About</a><a href="contact.html">Contact</a></nav>
+<div class="nav-actions"><a class="btn btn-outline" href="login.html">Login</a><a class="btn btn-primary" href="register.html">Get Started</a></div>
+</header>
+<main><div class="container"><form class="form-card" id="registerForm"><div class="center"><span class="eyebrow">STUDENT REGISTRATION</span><h1 style="margin:12px 0">Create Account</h1></div><div class="field" style="margin-top:22px"><label>Full Name</label><input name="name" class="input" required></div><div class="field" style="margin-top:15px"><label>Email</label><input name="email" type="email" class="input" required></div><div class="field" style="margin-top:15px"><label>Password</label><input name="password" type="password" minlength="6" class="input" required></div><button class="btn btn-green" style="width:100%;margin-top:20px">Register</button></form></div></main>
+<footer><div class="container footer-grid"><div><h2>⌬ Cyber World University</h2><p class="muted">Online cybersecurity education and student learning platform.</p></div><div><h3>Platform</h3><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a></div><div><h3>Company</h3><a href="about.html">About</a><a href="contact.html">Contact</a></div><div><h3>Account</h3><a href="login.html">Login</a><a href="register.html">Register</a></div></div><div class="container footer-bottom">© 2026 Cyber World University. All Rights Reserved.</div></footer>
+<div id="toast" class="toast"></div><script src="js/app.js"></script></body></html>
