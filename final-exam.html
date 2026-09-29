@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Final Examination | CWU</title><link rel="stylesheet" href="css/style.css"></head>
+<body><header class="navbar"><a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a><nav class="nav-links"><a href="dashboard.html">Dashboard</a><a href="courses.html">Courses</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a></nav></header>
+<main><div class="container"><section class="page-head"><span class="eyebrow">FINAL ASSESSMENT</span><h1 id="title">Final Examination</h1><p id="meta" class="muted">Loading...</p></section><div id="error" class="notice" hidden></div><form id="examForm" class="card" style="display:none"><div class="card-body"><div id="questions"></div><button class="btn btn-primary" type="submit">Submit Final Examination</button></div></form><div id="result" class="card" hidden><div class="card-body center"><h2 id="resultTitle"></h2><p id="resultText" class="muted"></p><a id="certificateLink" class="btn btn-primary" href="certificates.html" hidden>View Certificate</a></div></div></div></main>
+<div id="toast" class="toast"></div>
+<script type="module">
+import "./js/firebase.js";
+const id=new URLSearchParams(location.search).get("id"), $=x=>document.getElementById(x);
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));}
+async function boot(){try{
+ const user=await window.CWU.currentUser(); if(!user){location.replace("login.html?redirect=final-exam");return;}
+ if(!id) throw new Error("Exam ID is missing.");
+ const data=await window.CWU.exam(id), e=data.exam;
+ $("title").textContent=e.title; $("meta").textContent=e.questionCount?e.questionCount+" questions • "+e.durationMinutes+" minutes • Passing score "+e.passingScore+"%":"Final examination";
+ $("questions").innerHTML=(e.questions||[]).map((q,i)=>'<article class="card" style="margin:16px 0"><div class="card-body"><h3>'+ (i+1)+'. '+esc(q.question)+'</h3>'+(q.options||[]).map((o,j)=>'<label style="display:block;margin:10px 0"><input type="radio" name="q_'+q.id+'" value="'+j+'"> '+esc(o)+'</label>').join("")+'</div></article>').join("");
+ $("examForm").style.display="block";
+ $("examForm").addEventListener("submit",async ev=>{ev.preventDefault();const answers={};(e.questions||[]).forEach(q=>{const x=document.querySelector('input[name="q_'+q.id+'"]:checked');if(x)answers[q.id]=Number(x.value);});try{const r=await window.CWU.submitExam(id,answers);$("examForm").style.display="none";$("result").hidden=false;$("resultTitle").textContent=r.passed?"Examination Passed":"Examination Not Passed";$("resultText").textContent="Score: "+r.score+"% ("+r.earnedPoints+"/"+r.totalPoints+" points).";if(r.certificate){$("certificateLink").hidden=false;}}catch(err){$("error").hidden=false;$("error").textContent=err.message;}});
+ }catch(err){$("error").hidden=false;$("error").textContent=err.message;}}
+boot();
+</script></body></html>
