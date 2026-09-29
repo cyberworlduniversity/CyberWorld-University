@@ -350,6 +350,74 @@ def admin_delete_phase(phase_id):
     return jsonify({"message": "Phase deleted"})
 
 
+def phase_exists(phase_id):
+    return db.collection("course_phases").document(phase_id).get()
+
+
+def lesson_payload(data):
+    title = required_text(data, "title")
+    return {
+        "title": title,
+        "description": str(data.get("description", "")).strip(),
+        "sortOrder": int(data.get("sortOrder", 1) or 1),
+        "status": str(data.get("status", "draft")).strip().lower(),
+        "durationMinutes": int(data.get("durationMinutes", 0) or 0),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+
+
+@app.get("/api/admin/phases/<phase_id>/lessons")
+@firebase_user_required("admin")
+def admin_phase_lessons(phase_id):
+    if not phase_exists(phase_id).exists:
+        return jsonify({"error": "Phase not found"}), 404
+    docs = db.collection("lessons").where("phaseId", "==", phase_id).order_by("sortOrder").stream()
+    return jsonify({"lessons": [serialize(doc) for doc in docs]})
+
+
+@app.post("/api/admin/phases/<phase_id>/lessons")
+@firebase_user_required("admin")
+def admin_create_lesson(phase_id):
+    if not phase_exists(phase_id).exists:
+        return jsonify({"error": "Phase not found"}), 404
+    try:
+        payload = lesson_payload(admin_payload())
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid lesson data"}), 400
+    payload.update({
+        "phaseId": phase_id,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "createdBy": request.cwu_user["uid"],
+    })
+    ref = db.collection("lessons").document()
+    ref.set(payload)
+    return jsonify({"lesson": serialize(ref.get())}), 201
+
+
+@app.put("/api/admin/lessons/<lesson_id>")
+@firebase_user_required("admin")
+def admin_update_lesson(lesson_id):
+    ref = db.collection("lessons").document(lesson_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Lesson not found"}), 404
+    try:
+        payload = lesson_payload(admin_payload())
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid lesson data"}), 400
+    ref.update(payload)
+    return jsonify({"lesson": serialize(ref.get())})
+
+
+@app.delete("/api/admin/lessons/<lesson_id>")
+@firebase_user_required("admin")
+def admin_delete_lesson(lesson_id):
+    ref = db.collection("lessons").document(lesson_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Lesson not found"}), 404
+    ref.delete()
+    return jsonify({"message": "Lesson deleted"})
+
+
 @app.get("/api/admin/stats")
 @firebase_user_required("admin")
 def admin_stats():
