@@ -10,41 +10,24 @@
 <nav class="nav-links"><a href="index.html">Home</a><a href="courses.html">Courses</a><a href="quizzes.html">Quizzes</a><a class="active" href="exams.html">Examinations</a><a href="certificates.html">Certificates</a></nav>
 <div class="nav-actions"><a class="btn btn-outline" href="login.html">Login</a></div>
 </header>
-<main>
-<div class="container">
-<section class="page-head"><span class="eyebrow">FINAL ASSESSMENT</span><h1>My Final Examinations</h1><p>Final examinations available for your enrolled courses. Complete the required course progress before starting.</p></section>
+<main><div class="container">
+<section class="page-head"><span class="eyebrow">FINAL ASSESSMENT</span><h1>My Final Examinations</h1><p>Final examinations available for your enrolled courses. The server will verify your course-progress eligibility when you start.</p></section>
 <div id="message" class="card" style="margin-bottom:20px;display:none"><div class="card-body"></div></div>
 <div id="list" class="grid"></div>
-</div>
-</main>
+</div></main>
 <footer><div class="container footer-bottom">© 2026 Cyber World University. All Rights Reserved.</div></footer>
-
 <script type="module">
 import "./js/firebase.js";
-const list=document.getElementById("list"), message=document.getElementById("message");
+const list=document.getElementById("list"),message=document.getElementById("message");
 const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 function showMessage(text){message.style.display="block";message.querySelector(".card-body").textContent=text;}
 async function load(){
-  try{
-    const u=await window.CWU.currentUser();
-    if(!u){showMessage("Please log in to view your final examinations.");list.innerHTML='<a class="btn btn-primary" href="login.html">Login</a>';return;}
-    const exams=await window.CWU.exams();
-    list.innerHTML=exams.length?exams.map(e=>{
-      const progress=Number(e.progress??e.courseProgress??0);
-      const eligibility=Number(e.eligibilityProgress??100);
-      const eligible=progress>=eligibility;
-      return '<div class="card"><div class="card-body">'+
-        '<span class="eyebrow">FINAL EXAMINATION</span>'+
-        '<h3>'+esc(e.title)+'</h3>'+
-        '<p>'+esc(e.description||"Final assessment for this course.")+'</p>'+
-        '<p><strong>'+Number(e.questionCount||0)+'</strong> questions · <strong>'+Number(e.durationMinutes||30)+'</strong> minutes · Passing <strong>'+Number(e.passingScore||50)+'%</strong></p>'+
-        '<p class="muted">Required course progress: '+eligibility+'%</p>'+
-        (eligible?
-          '<a class="btn btn-green" href="final-exam.html?id='+encodeURIComponent(e.id)+'">Start Final Exam</a>':
-          '<button class="btn" disabled>Complete '+eligibility+'% Progress First</button>')+
-        '</div></div>';
-    }).join(""):'<div class="card"><div class="card-body"><p class="muted">No final examinations are currently available for your enrolled courses.</p></div></div>';
-  }catch(e){showMessage(e.message);list.innerHTML="";}
+ try{
+  const u=await window.CWU.currentUser();
+  if(!u){showMessage("Please log in to view your final examinations.");list.innerHTML='<a class="btn btn-primary" href="login.html">Login</a>';return;}
+  const exams=await window.CWU.exams();
+  list.innerHTML=exams.length?exams.map(e=>'<div class="card"><div class="card-body"><span class="eyebrow">FINAL EXAMINATION</span><h3>'+esc(e.title)+'</h3><p>'+esc(e.description||"Final assessment for this course.")+'</p><p><strong>'+Number(e.questionCount||0)+'</strong> questions · <strong>'+Number(e.durationMinutes||30)+'</strong> minutes · Passing <strong>'+Number(e.passingScore||50)+'%</strong></p><p class="muted">Required course progress: '+Number(e.eligibilityProgress||100)+'%</p><a class="btn btn-green" href="final-exam.html?id='+encodeURIComponent(e.id)+'">Open Final Exam</a></div></div>').join(""):'<div class="card"><div class="card-body"><p class="muted">No final examinations are currently available for your enrolled courses.</p></div></div>';
+ }catch(e){showMessage(e.message);list.innerHTML="";}
 }
 load();
 </script>
