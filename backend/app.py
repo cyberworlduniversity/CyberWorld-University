@@ -597,6 +597,207 @@ def complete_student_lesson(course_id, lesson_id):
 
 
 
+
+def quiz_exists(quiz_id):
+    return db.collection("quizzes").document(quiz_id).get()
+
+
+def question_payload(data):
+    text = required_text(data, "question")
+    options = data.get("options") or []
+    if not isinstance(options, list) or len(options) < 2:
+        raise ValueError("At least two options are required")
+    options = [str(item).strip() for item in options if str(item).strip()]
+    if len(options) < 2:
+        raise ValueError("At least two options are required")
+    correct_index = int(data.get("correctIndex", 0))
+    if correct_index < 0 or correct_index >= len(options):
+        raise ValueError("Invalid correct option")
+    question_type = str(data.get("type", "mcq")).strip().lower()
+    if question_type not in {"mcq", "true_false"}:
+        raise ValueError("Invalid question type")
+    return {
+        "quizId": required_text(data, "quizId"),
+        "question": text,
+        "options": options,
+        "correctIndex": correct_index,
+        "type": question_type,
+        "points": int(data.get("points", 1) or 1),
+        "status": str(data.get("status", "draft")).strip().lower(),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+
+
+@app.get("/api/admin/quizzes")
+@firebase_user_required("admin")
+def admin_quizzes():
+    docs = db.collection("quizzes").order_by("createdAt", direction=firestore.Query.DESCENDING).stream()
+    return jsonify({"quizzes": [serialize(doc) for doc in docs]})
+
+
+@app.post("/api/admin/quizzes")
+@firebase_user_required("admin")
+def admin_create_quiz():
+    data = admin_payload()
+    try:
+        title = required_text(data, "title")
+        course_id = required_text(data, "courseId")
+        payload = {
+            "title": title,
+            "courseId": course_id,
+            "description": str(data.get("description", "")).strip(),
+            "durationMinutes": int(data.get("durationMinutes", 10) or 10),
+            "passingScore": int(data.get("passingScore", 50) or 50),
+            "status": str(data.get("status", "draft")).strip().lower(),
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+            "createdBy": request.cwu_user["uid"],
+        }
+        if payload["status"] not in {"draft", "published"}:
+            raise ValueError("Invalid status")
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid quiz data"}), 400
+    ref = db.collection("quizzes").document()
+    ref.set(payload)
+    return jsonify({"quiz": serialize(ref.get())}), 201
+
+
+@app.get("/api/admin/quizzes/<quiz_id>/questions")
+@firebase_user_required("admin")
+def admin_quiz_questions(quiz_id):
+    if not quiz_exists(quiz_id).exists:
+        return jsonify({"error": "Quiz not found"}), 404
+    docs = db.collection("questions").where("quizId", "==", quiz_id).order_by("createdAt").stream()
+    return jsonify({"questions": [serialize(doc) for doc in docs]})
+
+
+@app.post("/api/admin/questions")
+@firebase_user_required("admin")
+def admin_create_question():
+    data = admin_payload()
+    try:
+        payload = question_payload(data)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid question data"}), 400
+    if not quiz_exists(payload["quizId"]).exists:
+        return jsonify({"error": "Quiz not found"}), 404
+    payload["createdAt"] = firestore.SERVER_TIMESTAMP
+    payload["createdBy"] = request.cwu_user["uid"]
+    ref = db.collection("questions").document()
+    ref.set(payload)
+    return jsonify({"question": serialize(ref.get())}), 201
+
+
+@app.delete("/api/admin/questions/<question_id>")
+@firebase_user_required("admin")
+def admin_delete_question(question_id):
+    ref = db.collection("questions").document(question_id)
+    if not ref.get().exists:
+        return jsonify({"error": "Question not found"}), 404
+    ref.delete()
+    return jsonify({"message": "Question deleted"})
+
+
+@app.get("/api/student/quizzes")
+@firebase_user_required("student")
+def student_quizzes():
+    uid = request.cwu_user["uid"]
+    enrolled_ids = {
+        doc.to_dict().get("courseId")
+        for doc in db.collection("enrollments").where("studentId", "==", uid).stream()
+    }
+    result = []
+    for doc in db.collection("quizzes").where("status", "==", "published").stream():
+        quiz = serialize(doc)
+        if quiz.get("courseId") not in enrolled_ids:
+            continue
+        count = len(list(db.collection("questions").where("quizId", "==", doc.id).where("status", "==", "published").stream()))
+        result.append({
+            "id": quiz["id"],
+            "title": quiz.get("title", ""),
+            "description": quiz.get("description", ""),
+            "courseId": quiz.get("courseId"),
+            "durationMinutes": quiz.get("durationMinutes", 10),
+            "passingScore": quiz.get("passingScore", 50),
+            "questionCount": count,
+        })
+    return jsonify({"quizzes": result})
+
+
+@app.get("/api/student/quizzes/<quiz_id>")
+@firebase_user_required("student")
+def student_quiz(quiz_id):
+    uid = request.cwu_user["uid"]
+    quiz_doc = quiz_exists(quiz_id)
+    if not quiz_doc.exists or quiz_doc.to_dict().get("status") != "published":
+        return jsonify({"error": "Quiz not found"}), 404
+    quiz = serialize(quiz_doc)
+    if not student_enrollment(quiz.get("courseId"), uid):
+        return jsonify({"error": "You must enroll in the course first"}), 403
+    questions = []
+    for doc in db.collection("questions").where("quizId", "==", quiz_id).where("status", "==", "published").stream():
+        item = serialize(doc)
+        item.pop("correctIndex", None)
+        questions.append(item)
+    quiz["questions"] = questions
+    return jsonify({"quiz": quiz})
+
+
+@app.post("/api/student/quizzes/<quiz_id>/submit")
+@firebase_user_required("student")
+def student_submit_quiz(quiz_id):
+    uid = request.cwu_user["uid"]
+    quiz_doc = quiz_exists(quiz_id)
+    if not quiz_doc.exists or quiz_doc.to_dict().get("status") != "published":
+        return jsonify({"error": "Quiz not found"}), 404
+    quiz = quiz_doc.to_dict() or {}
+    if not student_enrollment(quiz.get("courseId"), uid):
+        return jsonify({"error": "You must enroll in the course first"}), 403
+
+    data = request.get_json(silent=True) or {}
+    answers = data.get("answers") or {}
+    question_docs = list(db.collection("questions").where("quizId", "==", quiz_id).where("status", "==", "published").stream())
+    total_points = sum(int((d.to_dict() or {}).get("points", 1) or 1) for d in question_docs)
+    earned = 0
+    answered = 0
+    for doc in question_docs:
+        item = doc.to_dict() or {}
+        raw = answers.get(doc.id)
+        if raw is None:
+            continue
+        answered += 1
+        try:
+            selected = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if selected == int(item.get("correctIndex", -1)):
+            earned += int(item.get("points", 1) or 1)
+    score = round((earned / total_points) * 100) if total_points else 0
+    passed = score >= int(quiz.get("passingScore", 50) or 50)
+
+    attempt_ref = db.collection("quiz_attempts").document()
+    attempt_ref.set({
+        "studentId": uid,
+        "quizId": quiz_id,
+        "courseId": quiz.get("courseId"),
+        "score": score,
+        "earnedPoints": earned,
+        "totalPoints": total_points,
+        "answered": answered,
+        "passed": passed,
+        "submittedAt": firestore.SERVER_TIMESTAMP,
+    })
+    return jsonify({
+        "message": "Quiz submitted",
+        "score": score,
+        "passed": passed,
+        "earnedPoints": earned,
+        "totalPoints": total_points,
+        "answered": answered,
+    })
+
+
+
 @app.get("/api/admin/stats")
 @firebase_user_required("admin")
 def admin_stats():
