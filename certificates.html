@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Certificates | CWU</title><link rel="stylesheet" href="css/style.css"></head>
-<body>
-<header class="navbar">
-<a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a>
-<button class="menu-btn" onclick="toggleMenu()">☰</button>
-<nav class="nav-links" id="mainNav"><a href="index.html">Home</a><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a><a href="about.html">About</a><a href="contact.html">Contact</a></nav>
-<div class="nav-actions"><a class="btn btn-outline" href="login.html">Login</a><a class="btn btn-primary" href="register.html">Get Started</a></div>
-</header>
-<main><div class="container"><section class="page-head"><span class="eyebrow">ACHIEVEMENT</span><h1>Certificates</h1><p>Certificates can be issued when course completion requirements are satisfied.</p></section><div class="card"><div class="card-body center"><h2>Certificate Verification</h2><p class="muted">Enter a certificate number to verify a CWU certificate.</p><div style="max-width:500px;margin:20px auto;display:flex;gap:10px"><input id="certNo" class="input" placeholder="Example: CWU-2026-0001"><button class="btn btn-primary" onclick="toast('Connect certificate verification to the backend.');">Verify</button></div></div></div></div></main>
-<footer><div class="container footer-grid"><div><h2>⌬ Cyber World University</h2><p class="muted">Online cybersecurity education and student learning platform.</p></div><div><h3>Platform</h3><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a></div><div><h3>Company</h3><a href="about.html">About</a><a href="contact.html">Contact</a></div><div><h3>Account</h3><a href="login.html">Login</a><a href="register.html">Register</a></div></div><div class="container footer-bottom">© 2026 Cyber World University. All Rights Reserved.</div></footer>
-<div id="toast" class="toast"></div><script src="js/app.js"></script></body></html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Certificates | CWU</title><link rel="stylesheet" href="css/style.css"></head>
+<body><header class="navbar"><a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a><nav class="nav-links"><a href="index.html">Home</a><a href="courses.html">Courses</a><a href="dashboard.html">Dashboard</a><a href="certificates.html">Certificates</a></nav></header>
+<main><div class="container"><section class="page-head"><span class="eyebrow">ACHIEVEMENT</span><h1>Certificates</h1><p>View your issued CWU certificates or verify a certificate number.</p></section>
+<div class="card"><div class="card-body"><h2>Verify Certificate</h2><div style="display:flex;gap:10px;max-width:600px"><input id="certNo" class="input" placeholder="CWU-2026-XXXXXXXX"><button id="verify" class="btn btn-primary">Verify</button></div><div id="verifyResult" class="notice" style="margin-top:16px" hidden></div></div></div>
+<div id="myCertificates" class="section-head" style="margin-top:30px"><h2>My Certificates</h2></div><div id="list"></div>
+</div></main><div id="toast" class="toast"></div>
+<script type="module">
+import "./js/firebase.js";
+const $=id=>document.getElementById(id);
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));}
+async function boot(){try{const u=await window.CWU.currentUser();if(!u){$("list").innerHTML='<p class="muted">Login to view your certificates.</p>';return;}const cs=await window.CWU.certificates();$("list").innerHTML=cs.length?cs.map(c=>'<div class="card" style="margin:14px 0"><div class="card-body"><h3>'+esc(c.courseTitle)+'</h3><p>Certificate: <strong>'+esc(c.certificateNumber)+'</strong></p><p>Score: '+esc(c.score)+'% • Status: '+esc(c.status)+'</p></div></div>').join(""):'<p class="muted">No certificates have been issued yet. Pass the final examination after completing the required course progress.</p>';}catch(e){$("list").innerHTML='<p class="muted">'+esc(e.message)+'</p>';}}
+$("verify").onclick=async()=>{const n=$("certNo").value.trim();if(!n)return;$("verifyResult").hidden=false;try{const r=await fetch("https://cyberworlduniversity.onrender.com/api/certificates/"+encodeURIComponent(n));const d=await r.json();$("verifyResult").textContent=d.valid?"Valid certificate: "+d.certificate.studentName+" — "+d.certificate.courseTitle+" — "+d.certificate.score+"%":"Certificate not found.";}catch(e){$("verifyResult").textContent="Verification service unavailable.";}};boot();
+</script></body></html>
