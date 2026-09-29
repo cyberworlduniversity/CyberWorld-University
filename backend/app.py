@@ -900,7 +900,18 @@ def student_exam(exam_id):
     questions = []
     for q in db.collection("exam_questions").where("examId", "==", exam_id).where("status", "==", "published").stream():
         item = serialize(q); item.pop("correctIndex", None); questions.append(item)
+    if not questions:
+        return jsonify({"error": "This examination has no published questions"}), 400
+    attempt_ref = db.collection("exam_attempts").document(f"{uid}_{exam_id}")
+    active = attempt_ref.get()
+    if active.exists and (active.to_dict() or {}).get("status") == "in_progress":
+        return jsonify({"error": "An examination attempt is already in progress"}), 409
+    attempt_ref.set({
+        "studentId": uid, "examId": exam_id, "courseId": exam.get("courseId"),
+        "status": "in_progress", "startedAt": firestore.SERVER_TIMESTAMP
+    })
     exam["questions"] = questions
+    exam["serverStartedAt"] = datetime.now(timezone.utc).isoformat()
     return jsonify({"exam": exam})
 
 @app.post("/api/student/exams/<exam_id>/submit")
