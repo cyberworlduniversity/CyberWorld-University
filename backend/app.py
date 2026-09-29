@@ -1241,6 +1241,46 @@ def admin_delete_advertisement(advertisement_id):
     return jsonify({"message": "Advertisement deleted"})
 
 
+@app.get("/api/website-content")
+def public_website_content():
+    doc = db.collection("website_content").document("home").get()
+    return jsonify({"content": serialize(doc) if doc.exists else {}})
+
+
+@app.get("/api/admin/settings")
+@firebase_user_required("admin")
+def admin_settings():
+    settings_doc = db.collection("settings").document("site").get()
+    content_doc = db.collection("website_content").document("home").get()
+    return jsonify({
+        "settings": serialize(settings_doc) if settings_doc.exists else {},
+        "content": serialize(content_doc) if content_doc.exists else {},
+    })
+
+
+@app.put("/api/admin/settings")
+@firebase_user_required("admin")
+def admin_update_settings():
+    data = admin_payload()
+    settings = {
+        "contactEmail": str(data.get("contactEmail", "")).strip(),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+        "updatedBy": request.cwu_user["uid"],
+    }
+    content = {
+        "homepageTitle": str(data.get("homepageTitle", "")).strip(),
+        "heroText": str(data.get("heroText", "")).strip(),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+        "updatedBy": request.cwu_user["uid"],
+    }
+    db.collection("settings").document("site").set(settings, merge=True)
+    db.collection("website_content").document("home").set(content, merge=True)
+    return jsonify({
+        "settings": serialize(db.collection("settings").document("site").get()),
+        "content": serialize(db.collection("website_content").document("home").get()),
+    })
+
+
 @app.get("/api/admin/stats")
 @firebase_user_required("admin")
 def admin_stats():
