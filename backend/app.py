@@ -797,6 +797,168 @@ def student_submit_quiz(quiz_id):
     })
 
 
+def exam_exists(exam_id):
+    return db.collection("exams").document(exam_id).get()
+
+def exam_question_payload(data):
+    text = required_text(data, "question")
+    options = data.get("options") or []
+    if not isinstance(options, list):
+        raise ValueError("options must be a list")
+    options = [str(item).strip() for item in options if str(item).strip()]
+    if len(options) < 2:
+        raise ValueError("At least two options are required")
+    correct_index = int(data.get("correctIndex", 0))
+    if correct_index < 0 or correct_index >= len(options):
+        raise ValueError("Invalid correct option")
+    return {"examId": required_text(data, "examId"), "question": text, "options": options,
+            "correctIndex": correct_index, "points": max(1, int(data.get("points", 1) or 1)),
+            "status": str(data.get("status", "draft")).strip().lower(), "updatedAt": firestore.SERVER_TIMESTAMP}
+
+@app.get("/api/admin/exams")
+@firebase_user_required("admin")
+def admin_exams():
+    docs = db.collection("exams").order_by("createdAt", direction=firestore.Query.DESCENDING).stream()
+    return jsonify({"exams": [serialize(doc) for doc in docs]})
+
+@app.post("/api/admin/exams")
+@firebase_user_required("admin")
+def admin_create_exam():
+    data = admin_payload()
+    try:
+        course_id = required_text(data, "courseId")
+        if not db.collection("courses").document(course_id).get().exists:
+            return jsonify({"error": "Course not found"}), 404
+        payload = {"title": required_text(data, "title"), "courseId": course_id,
+                   "description": str(data.get("description", "")).strip(),
+                   "durationMinutes": max(1, int(data.get("durationMinutes", 30) or 30)),
+                   "passingScore": max(1, min(100, int(data.get("passingScore", 50) or 50))),
+                   "eligibilityProgress": max(0, min(100, int(data.get("eligibilityProgress", 100) or 100))),
+                   "status": str(data.get("status", "draft")).strip().lower(),
+                   "createdAt": firestore.SERVER_TIMESTAMP, "updatedAt": firestore.SERVER_TIMESTAMP,
+                   "createdBy": request.cwu_user["uid"]}
+        if payload["status"] not in {"draft", "published"}: raise ValueError("Invalid status")
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid exam data"}), 400
+    ref = db.collection("exams").document(); ref.set(payload)
+    return jsonify({"exam": serialize(ref.get())}), 201
+
+@app.get("/api/admin/exams/<exam_id>/questions")
+@firebase_user_required("admin")
+def admin_exam_questions(exam_id):
+    if not exam_exists(exam_id).exists: return jsonify({"error": "Exam not found"}), 404
+    docs = db.collection("exam_questions").where("examId", "==", exam_id).order_by("createdAt").stream()
+    return jsonify({"questions": [serialize(doc) for doc in docs]})
+
+@app.post("/api/admin/exam-questions")
+@firebase_user_required("admin")
+def admin_create_exam_question():
+    try: payload = exam_question_payload(admin_payload())
+    except (ValueError, TypeError): return jsonify({"error": "Invalid exam question data"}), 400
+    if not exam_exists(payload["examId"]).exists: return jsonify({"error": "Exam not found"}), 404
+    payload["createdAt"] = firestore.SERVER_TIMESTAMP; payload["createdBy"] = request.cwu_user["uid"]
+    ref = db.collection("exam_questions").document(); ref.set(payload)
+    return jsonify({"question": serialize(ref.get())}), 201
+
+@app.delete("/api/admin/exam-questions/<question_id>")
+@firebase_user_required("admin")
+def admin_delete_exam_question(question_id):
+    ref = db.collection("exam_questions").document(question_id)
+    if not ref.get().exists: return jsonify({"error": "Question not found"}), 404
+    ref.delete(); return jsonify({"message": "Question deleted"})
+
+def certificate_number():
+    import secrets
+    from datetime import datetime
+    return "CWU-" + str(datetime.utcnow().year) + "-" + secrets.token_hex(4).upper()
+
+@app.get("/api/student/exams")
+@firebase_user_required("student")
+def student_exams():
+    uid = request.cwu_user["uid"]
+    enrolled_ids = {doc.to_dict().get("courseId") for doc in db.collection("enrollments").where("studentId", "==", uid).stream()}
+    result = []
+    for doc in db.collection("exams").where("status", "==", "published").stream():
+        exam = serialize(doc)
+        if exam.get("courseId") not in enrolled_ids: continue
+        result.append({"id": exam["id"], "title": exam.get("title", ""), "description": exam.get("description", ""),
+                       "courseId": exam.get("courseId"), "durationMinutes": exam.get("durationMinutes", 30),
+                       "passingScore": exam.get("passingScore", 50), "eligibilityProgress": exam.get("eligibilityProgress", 100),
+                       "questionCount": len(list(db.collection("exam_questions").where("examId", "==", doc.id).where("status", "==", "published").stream()))})
+    return jsonify({"exams": result})
+
+@app.get("/api/student/exams/<exam_id>")
+@firebase_user_required("student")
+def student_exam(exam_id):
+    uid = request.cwu_user["uid"]; doc = exam_exists(exam_id)
+    if not doc.exists or doc.to_dict().get("status") != "published": return jsonify({"error": "Exam not found"}), 404
+    exam = serialize(doc); enrollment_doc = student_enrollment(exam.get("courseId"), uid)
+    if not enrollment_doc: return jsonify({"error": "You must enroll in the course first"}), 403
+    progress = int((enrollment_doc.to_dict() or {}).get("progress", 0) or 0); eligibility = int(exam.get("eligibilityProgress", 100) or 100)
+    if progress < eligibility: return jsonify({"error": f"Complete at least {eligibility}% of the course before taking this exam", "progress": progress, "eligibilityProgress": eligibility}), 403
+    questions = []
+    for q in db.collection("exam_questions").where("examId", "==", exam_id).where("status", "==", "published").stream():
+        item = serialize(q); item.pop("correctIndex", None); questions.append(item)
+    exam["questions"] = questions
+    return jsonify({"exam": exam})
+
+@app.post("/api/student/exams/<exam_id>/submit")
+@firebase_user_required("student")
+def student_submit_exam(exam_id):
+    uid = request.cwu_user["uid"]; doc = exam_exists(exam_id)
+    if not doc.exists or doc.to_dict().get("status") != "published": return jsonify({"error": "Exam not found"}), 404
+    exam = doc.to_dict() or {}; enrollment_doc = student_enrollment(exam.get("courseId"), uid)
+    if not enrollment_doc: return jsonify({"error": "You must enroll in the course first"}), 403
+    progress = int((enrollment_doc.to_dict() or {}).get("progress", 0) or 0); eligibility = int(exam.get("eligibilityProgress", 100) or 100)
+    if progress < eligibility: return jsonify({"error": f"Complete at least {eligibility}% of the course before taking this exam"}), 403
+    answers = (request.get_json(silent=True) or {}).get("answers") or {}
+    questions = list(db.collection("exam_questions").where("examId", "==", exam_id).where("status", "==", "published").stream())
+    total_points = sum(int((q.to_dict() or {}).get("points", 1) or 1) for q in questions); earned = 0; answered = 0
+    for q in questions:
+        item = q.to_dict() or {}; raw = answers.get(q.id)
+        if raw is None: continue
+        answered += 1
+        try: selected = int(raw)
+        except (TypeError, ValueError): continue
+        if selected == int(item.get("correctIndex", -1)): earned += int(item.get("points", 1) or 1)
+    score = round((earned / total_points) * 100) if total_points else 0; passed = score >= int(exam.get("passingScore", 50) or 50)
+    attempt_ref = db.collection("exam_attempts").document()
+    attempt_ref.set({"studentId": uid, "examId": exam_id, "courseId": exam.get("courseId"), "score": score,
+                     "earnedPoints": earned, "totalPoints": total_points, "answered": answered, "passed": passed,
+                     "submittedAt": firestore.SERVER_TIMESTAMP})
+    certificate = None
+    if passed:
+        existing = list(db.collection("certificates").where("studentId", "==", uid).where("courseId", "==", exam.get("courseId")).where("status", "==", "issued").limit(1).stream())
+        if existing: certificate = serialize(existing[0])
+        else:
+            course = (db.collection("courses").document(exam.get("courseId")).get().to_dict() or {})
+            ref = db.collection("certificates").document()
+            ref.set({"certificateNumber": certificate_number(), "studentId": uid,
+                     "studentName": request.cwu_user.get("name") or request.cwu_user.get("email", "CWU Student"),
+                     "studentEmail": request.cwu_user.get("email", ""), "courseId": exam.get("courseId"),
+                     "courseTitle": course.get("title", ""), "examId": exam_id, "score": score,
+                     "status": "issued", "issuedAt": firestore.SERVER_TIMESTAMP, "verificationCode": ref.id})
+            certificate = serialize(ref.get())
+    return jsonify({"message": "Final examination submitted", "score": score, "passed": passed,
+                    "earnedPoints": earned, "totalPoints": total_points, "answered": answered, "certificate": certificate})
+
+@app.get("/api/student/certificates")
+@firebase_user_required("student")
+def student_certificates():
+    uid = request.cwu_user["uid"]
+    docs = db.collection("certificates").where("studentId", "==", uid).order_by("issuedAt", direction=firestore.Query.DESCENDING).stream()
+    return jsonify({"certificates": [serialize(doc) for doc in docs]})
+
+@app.get("/api/certificates/<certificate_number>")
+def verify_certificate(certificate_number):
+    docs = db.collection("certificates").where("certificateNumber", "==", certificate_number).where("status", "==", "issued").limit(1).stream()
+    doc = next(docs, None)
+    if not doc: return jsonify({"valid": False, "error": "Certificate not found"}), 404
+    c = serialize(doc)
+    return jsonify({"valid": True, "certificate": {"certificateNumber": c.get("certificateNumber"), "studentName": c.get("studentName"),
+                                                   "courseTitle": c.get("courseTitle"), "score": c.get("score"),
+                                                   "issuedAt": c.get("issuedAt"), "status": c.get("status")}})
+
 
 @app.get("/api/admin/stats")
 @firebase_user_required("admin")
