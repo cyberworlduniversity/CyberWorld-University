@@ -114,7 +114,17 @@ def course_detail(course_id):
         .where("status", "==", "published")
         .order_by("sortOrder")
     )
-    course["phases"] = [serialize(doc) for doc in phases_query.stream()]
+    course["phases"] = []
+    for phase_doc in phases_query.stream():
+        phase = serialize(phase_doc)
+        lesson_query = (
+            db.collection("lessons")
+            .where("phaseId", "==", phase_doc.id)
+            .where("status", "==", "published")
+            .order_by("sortOrder")
+        )
+        phase["lessons"] = [serialize(doc) for doc in lesson_query.stream()]
+        course["phases"].append(phase)
     return jsonify({"course": course})
 
 
