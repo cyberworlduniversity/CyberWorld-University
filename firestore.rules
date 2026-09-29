@@ -54,24 +54,17 @@ service cloud.firestore {
     }
 
     match /enrollments/{enrollmentId} {
-      allow create: if signedIn()
-        && request.resource.data.studentId == request.auth.uid;
+      // Enrollment writes are performed by the trusted Flask backend.
       allow read: if signedIn()
         && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow update: if signedIn()
-        && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /lesson_progress/{progressId} {
+      // Progress writes are performed by the trusted Flask backend.
       allow read: if signedIn()
         && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow create: if signedIn()
-        && request.resource.data.studentId == request.auth.uid;
-      allow update: if signedIn()
-        && (resource.data.studentId == request.auth.uid || isAdmin())
-        && request.resource.data.studentId == resource.data.studentId;
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /questions/{questionId} {
@@ -100,23 +93,17 @@ service cloud.firestore {
     }
 
     match /quiz_attempts/{attemptId} {
-      allow create: if signedIn()
-        && request.resource.data.studentId == request.auth.uid;
+      // Quiz attempts are created and scored by the trusted Flask backend.
       allow read: if signedIn()
         && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow update: if signedIn()
-        && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /exam_attempts/{attemptId} {
-      allow create: if signedIn()
-        && request.resource.data.studentId == request.auth.uid;
+      // Examination attempts are created and scored by the trusted Flask backend.
       allow read: if signedIn()
         && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow update: if signedIn()
-        && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /certificates/{certificateId} {
