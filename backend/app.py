@@ -812,9 +812,12 @@ def exam_question_payload(data):
     correct_index = int(data.get("correctIndex", 0))
     if correct_index < 0 or correct_index >= len(options):
         raise ValueError("Invalid correct option")
+    status = str(data.get("status", "draft")).strip().lower()
+    if status not in {"draft", "published"}:
+        raise ValueError("status must be draft or published")
     return {"examId": required_text(data, "examId"), "question": text, "options": options,
             "correctIndex": correct_index, "points": max(1, int(data.get("points", 1) or 1)),
-            "status": str(data.get("status", "draft")).strip().lower(), "updatedAt": firestore.SERVER_TIMESTAMP}
+            "status": status, "updatedAt": firestore.SERVER_TIMESTAMP}
 
 @app.get("/api/admin/exams")
 @firebase_user_required("admin")
@@ -947,10 +950,9 @@ def student_submit_exam(exam_id):
         except (TypeError, ValueError): continue
         if selected == int(item.get("correctIndex", -1)): earned += int(item.get("points", 1) or 1)
     score = round((earned / total_points) * 100) if total_points else 0; passed = score >= int(exam.get("passingScore", 50) or 50)
-    attempt_ref = db.collection("exam_attempts").document()
-    attempt_ref.set({"studentId": uid, "examId": exam_id, "courseId": exam.get("courseId"), "score": score,
-                     "earnedPoints": earned, "totalPoints": total_points, "answered": answered, "passed": passed,
-                     "submittedAt": firestore.SERVER_TIMESTAMP})
+    active_ref.update({"status": "submitted", "score": score, "earnedPoints": earned,
+                       "totalPoints": total_points, "answered": answered, "passed": passed,
+                       "submittedAt": firestore.SERVER_TIMESTAMP})
     certificate = None
     if passed:
         existing = list(db.collection("certificates").where("studentId", "==", uid).where("courseId", "==", exam.get("courseId")).where("status", "==", "issued").limit(1).stream())
