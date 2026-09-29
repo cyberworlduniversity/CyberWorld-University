@@ -1,6 +1,16 @@
 # Cyber World University (CWU)
 
-Complete responsive **HTML + CSS + JavaScript** project starter for the Cyber World University online cybersecurity learning platform.
+Cyber World University is a responsive online cybersecurity learning platform.
+
+## Architecture
+
+- Frontend: HTML + CSS + JavaScript
+- Backend: Python 3 + Flask
+- Authentication: Firebase Authentication
+- Database: Cloud Firestore
+- Trusted backend access: Firebase Admin SDK
+- Production API: Render Web Service
+- Website: static frontend files served separately from the Flask API
 
 ## Included
 
@@ -20,64 +30,57 @@ Complete responsive **HTML + CSS + JavaScript** project starter for the Cyber Wo
 ### Admin panel
 - Dashboard
 - Course CRUD
-- Videos management UI
-- Study materials management UI
-- Question bank with 100 seeded questions
-- Quiz management UI
-- Final examination management UI
-- Certificate management UI
+- Phase and lesson management
+- Videos management
+- Study materials management
+- Question bank
+- Quiz management
+- Final examination management
+- Certificate management
 - Advertisement management
 - Student management
 - Website content/settings
 
-## Demo accounts
+## Security
 
-Student:
-- Email: `student@cwu.example`
-- Password: `student123`
+- Firebase ID tokens are verified by the Flask backend.
+- Admin API routes require an authenticated Firebase user with the admin role.
+- Quiz and examination answer keys are not returned to students.
+- Quiz/examination timing is enforced server-side.
+- Enrollment, lesson-progress, quiz-attempt and exam-attempt writes are protected behind the trusted backend.
+- Firebase service-account credentials must remain in secure environment variables and must never be committed to GitHub.
+- Firebase browser configuration is public client configuration and is protected by Firebase Security Rules and backend authorization.
 
-Admin:
-- Email: `admin@cwu.example`
-- Password: `admin123`
+## Backend
 
-## Run
+The Flask backend is in `backend/`.
 
-No server is required for this frontend demo.
+Install dependencies:
 
-1. Extract the ZIP.
-2. Open `index.html` in a browser.
-3. For a better development experience, use VS Code + Live Server.
+`pip install -r backend/requirements.txt`
 
-## Important architecture note
+Run locally:
 
-This ZIP is a functional frontend/prototype. It uses `localStorage` as a temporary browser database so the course, question, student, enrollment and advertisement demos work without a server.
+`cd backend && python app.py`
 
-For production, replace the demo localStorage layer with a backend such as:
+Production start command:
 
-Frontend: HTML/CSS/JavaScript
-Backend: Python Flask
-Database: MySQL
-File storage: secure server/object storage
-Authentication: server-side sessions + password hashing
-Uploads: server-side MIME/type/size validation
-Security: CSRF protection, authorization, secure cookies, validation and access controls
+`gunicorn --bind 0.0.0.0:$PORT app:app`
 
-Do NOT use the demo admin password or client-side authentication in a production deployment.
+Required production secret:
 
-## Project structure
+- `FIREBASE_SERVICE_ACCOUNT_JSON`
 
-CyberWorldUniversity/
-├── index.html
-├── courses.html
-├── course-details.html
-├── study-materials.html
-├── quizzes.html
-├── certificates.html
-├── about.html
-├── contact.html
-├── login.html
-├── register.html
-├── dashboard.html
-├── admin/
-├── css/
-└── js/
+## Deployment
+
+`render.yaml` defines the Render Python Web Service and uses `/api/health` as its health check.
+
+The current development/production branch for this implementation is:
+
+`cwu-flask-mysql-foundation`
+
+Before promoting to the main production branch, run the final browser and live API smoke tests with the deployed frontend and Render service.
+
+## Repository
+
+GitHub: https://github.com/cyberworlduniversity/CyberWorld-University
