@@ -1157,6 +1157,20 @@ def verify_certificate(certificate_number):
                                                    "issuedAt": c.get("issuedAt"), "status": c.get("status")}})
 
 
+@app.get("/api/admin/students")
+@firebase_user_required("admin")
+def admin_students():
+    docs = db.collection("users").where("role", "==", "student").stream()
+    students = []
+    for doc in docs:
+        student = serialize(doc)
+        student.pop("password", None)
+        student.setdefault("status", "active")
+        students.append(student)
+    students.sort(key=lambda item: (str(item.get("name", "")).lower(), str(item.get("email", "")).lower()))
+    return jsonify({"students": students})
+
+
 @app.get("/api/admin/stats")
 @firebase_user_required("admin")
 def admin_stats():
