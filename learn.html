@@ -1,67 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Learn Course | Cyber World University</title>
-<link rel="stylesheet" href="css/style.css">
-<style>
-.learning{padding:40px 0}.learning-grid{display:grid;grid-template-columns:300px 1fr;gap:24px}
-.lesson-nav,.lesson-view{background:rgba(10,16,28,.92);border:1px solid rgba(255,255,255,.09);border-radius:18px}
-.lesson-nav{padding:18px;align-self:start;position:sticky;top:20px}.phase-title{font-weight:700;margin:16px 0 8px}.lesson-link{display:block;width:100%;text-align:left;background:transparent;border:0;color:inherit;padding:10px;border-radius:10px;cursor:pointer}.lesson-link:hover,.lesson-link.active{background:rgba(32,224,160,.10)}.lesson-link.done{color:#20e0a0}.lesson-view{padding:28px}.video-box{margin-top:20px;aspect-ratio:16/9;background:#05080f;border-radius:14px;overflow:hidden}.video-box iframe,.video-box video{width:100%;height:100%;border:0}.material{display:flex;justify-content:space-between;gap:15px;padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:12px;margin-top:10px}.progress-track{height:10px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden}.progress-fill{height:100%;background:#20e0a0}.muted{opacity:.72}@media(max-width:800px){.learning-grid{grid-template-columns:1fr}.lesson-nav{position:static}}
-</style>
-</head>
-<body>
-<header class="navbar">
-<a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a>
-<button class="menu-btn" onclick="toggleMenu()">☰</button>
-<nav class="nav-links" id="mainNav"><a href="index.html">Home</a><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="certificates.html">Certificates</a><a href="about.html">About</a><a href="contact.html">Contact</a></nav>
-</header>
-<main><div class="container learning" id="app"><div class="card"><div class="card-body"><p class="muted">Loading your course...</p></div></div></div></main>
-<script src="js/app.js"></script>
-<script type="module">
-import "./js/firebase.js";
-const courseId=new URLSearchParams(location.search).get("id");
-const root=document.getElementById("app");
-let course=null, selectedLesson=null;
-
-function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
-function allLessons(){return (course?.phases||[]).flatMap(p=>p.lessons||[]);}
-function videoEmbed(url){
-  if(!url) return "";
-  const value=String(url);
-  if(/youtube\.com\/watch\?v=|youtu\.be\//i.test(value)){
-    const match=value.match(/(?:v=|youtu\.be\/)([^&?/]+)/i);
-    return match?'<iframe src="https://www.youtube.com/embed/'+encodeURIComponent(match[1])+'" allowfullscreen loading="lazy"></iframe>':'';
-  }
-  if(/\.(mp4|webm|ogg)(\?|$)/i.test(value)) return '<video controls src="'+esc(value)+'"></video>';
-  return '<p class="muted" style="padding:20px">Open the video link below to start the lesson.</p>';
-}
-function render(){
-  const lessons=allLessons();
-  if(!selectedLesson && lessons.length) selectedLesson=lessons[0];
-  root.innerHTML='<div class="page-head" style="padding-top:0"><span class="eyebrow">LEARNING CENTER</span><h1>'+esc(course.title)+'</h1><p class="lead">'+esc(course.description||"")+'</p><div class="progress-track"><div class="progress-fill" style="width:'+Number(course.progress||0)+'%"></div></div><p class="muted">'+course.completedLessons+' of '+course.totalLessons+' lessons completed · '+course.progress+'%</p></div><div class="learning-grid"><aside class="lesson-nav"><strong>Course Curriculum</strong>'+course.phases.map(p=>'<div class="phase-title">'+esc(p.title)+'</div>'+(p.lessons||[]).map(l=>'<button class="lesson-link '+(l.id===selectedLesson?.id?"active ":"")+(l.completed?"done":"")+'" data-lesson="'+esc(l.id)+'">'+(l.completed?"✓ ":"")+esc(l.title)+'</button>').join("")).join("")+'</aside><section class="lesson-view">'+renderLesson()+'</section></div>';
-  root.querySelectorAll("[data-lesson]").forEach(btn=>btn.onclick=()=>{selectedLesson=lessons.find(l=>l.id===btn.dataset.lesson);render();});
-}
-function renderLesson(){
-  if(!selectedLesson) return '<h2>No lessons available</h2><p class="muted">Your instructor has not published any lessons yet.</p>';
-  const v=selectedLesson.videos?.[0], mats=selectedLesson.materials||[];
-  return '<span class="eyebrow">LESSON</span><h2>'+esc(selectedLesson.title)+'</h2><p class="muted">'+esc(selectedLesson.description||"")+'</p>'+(v?'<div class="video-box">'+videoEmbed(v.videoUrl)+'</div><p style="margin-top:10px"><a href="'+esc(v.videoUrl)+'" target="_blank" rel="noopener">Open video in new tab</a></p>':'<div class="card" style="margin-top:20px"><div class="card-body"><p class="muted">No published video for this lesson yet.</p></div></div>')+'<h3 style="margin-top:28px">Study Materials</h3>'+(mats.length?mats.map(m=>'<div class="material"><span><strong>'+esc(m.title)+'</strong><br><small class="muted">'+esc(m.fileType||"File")+'</small></span><a class="btn btn-outline" href="'+esc(m.materialUrl)+'" target="_blank" rel="noopener">Open</a></div>').join(""):'<p class="muted">No materials published for this lesson yet.</p>')+'<div style="margin-top:28px"><button class="btn btn-primary" id="completeBtn" '+(selectedLesson.completed?"disabled":"")+'>'+(selectedLesson.completed?"✓ Lesson Completed":"Mark Lesson Complete")+'</button></div>';
-}
-async function load(){
-  try{
-    if(!courseId){root.innerHTML='<div class="card"><div class="card-body"><h2>Course not specified</h2></div></div>';return;}
-    const user=await window.CWU.currentUser();
-    if(!user){location.href="login.html?redirect=learn";return;}
-    const result=await window.CWU.studentCourse(courseId);
-    course=result.course;render();
-    document.getElementById("completeBtn")?.addEventListener("click",async()=>{
-      try{
-        const result=await window.CWU.completeLesson(courseId,selectedLesson.id);
-        selectedLesson.completed=true;course.progress=result.progress;course.completedLessons=result.completedLessons;course.totalLessons=result.totalLessons;render();showToast("Lesson completed");
-      }catch(e){showToast(e.message);}
-    });
-  }catch(e){root.innerHTML='<div class="card"><div class="card-body"><h2>Unable to open course</h2><p>'+esc(e.message)+'</p><a class="btn btn-outline" href="dashboard.html">Back to Dashboard</a></div></div>';}
-}
-load();
-</script>
-</body></html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Learn Course | Cyber World University</title><link rel="stylesheet" href="css/style.css"><style>
+.learning{padding:40px 0}.learning-grid{display:grid;grid-template-columns:300px 1fr;gap:24px}.lesson-nav,.lesson-view{background:rgba(10,16,28,.92);border:1px solid rgba(255,255,255,.09);border-radius:18px}.lesson-nav{padding:18px;align-self:start;position:sticky;top:20px}.phase-title{font-weight:700;margin:16px 0 8px}.lesson-link{display:block;width:100%;text-align:left;background:transparent;border:0;color:inherit;padding:10px;border-radius:10px;cursor:pointer}.lesson-link:hover,.lesson-link.active{background:rgba(32,224,160,.10)}.lesson-link.done{color:#20e0a0}.lesson-view{padding:28px}.video-box{margin-top:20px;aspect-ratio:16/9;background:#05080f;border-radius:14px;overflow:hidden}.video-box iframe,.video-box video{width:100%;height:100%;border:0}.material{display:flex;justify-content:space-between;gap:15px;padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:12px;margin-top:10px}.progress-track{height:10px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden}.progress-fill{height:100%;background:#20e0a0}.muted{opacity:.72}.exam-box{margin-top:28px;padding:20px;border:1px solid rgba(32,224,160,.25);border-radius:16px;background:rgba(32,224,160,.06)}@media(max-width:800px){.learning-grid{grid-template-columns:1fr}.lesson-nav{position:static}}
+</style></head><body>
+<header class="navbar"><a class="logo" href="index.html"><span class="logo-mark">⌬</span><span><strong>Cyber World</strong><small>University</small></span></a><button class="menu-btn" onclick="toggleMenu()">☰</button><nav class="nav-links" id="mainNav"><a href="index.html">Home</a><a href="courses.html">Courses</a><a href="study-materials.html">Materials</a><a href="quizzes.html">Quizzes</a><a href="exams.html">Examinations</a><a href="certificates.html">Certificates</a><a href="about.html">About</a><a href="contact.html">Contact</a></nav></header>
+<main><div class="container learning" id="app"><div class="card"><div class="card-body"><p class="muted">Loading your course...</p></div></div></div></main><script src="js/app.js"></script>
+<script type="module">import "./js/firebase.js";
+const courseId=new URLSearchParams(location.search).get("id"),root=document.getElementById("app");let course=null,selectedLesson=null,courseExams=[];
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+function allLessons(){return(course?.phases||[]).flatMap(p=>p.lessons||[]);}
+function videoEmbed(url){if(!url)return"";const value=String(url);if(/youtube\.com\/watch\?v=|youtu\.be\//i.test(value)){const match=value.match(/(?:v=|youtu\.be\/)([^&?/]+)/i);return match?'<iframe src="https://www.youtube.com/embed/'+encodeURIComponent(match[1])+'" allowfullscreen loading="lazy"></iframe>':'';}if(/\.(mp4|webm|ogg)(\?|$)/i.test(value))return'<video controls src="'+esc(value)+'"></video>';return'<p class="muted" style="padding:20px">Open the video link below to start the lesson.</p>';}
+function render(){const lessons=allLessons();if(!selectedLesson&&lessons.length)selectedLesson=lessons[0];root.innerHTML='<div class="page-head" style="padding-top:0"><span class="eyebrow">LEARNING CENTER</span><h1>'+esc(course.title)+'</h1><p class="lead">'+esc(course.description||"")+'</p><div class="progress-track"><div class="progress-fill" style="width:'+Number(course.progress||0)+'%"></div></div><p class="muted">'+course.completedLessons+' of '+course.totalLessons+' lessons completed · '+course.progress+'%</p></div><div class="learning-grid"><aside class="lesson-nav"><strong>Course Curriculum</strong>'+course.phases.map(p=>'<div class="phase-title">'+esc(p.title)+'</div>'+(p.lessons||[]).map(l=>'<button class="lesson-link '+(l.id===selectedLesson?.id?"active ":"")+(l.completed?"done":"")+'" data-lesson="'+esc(l.id)+'">'+(l.completed?"✓ ":"")+esc(l.title)+'</button>').join("")).join("")+'</aside><section class="lesson-view">'+renderLesson()+'</section></div>';root.querySelectorAll("[data-lesson]").forEach(btn=>btn.onclick=()=>{selectedLesson=lessons.find(l=>l.id===btn.dataset.lesson);render();bindComplete();});}
+function renderExam(){const exam=courseExams[0];if(!exam)return"";const eligible=Number(course.progress||0)>=Number(exam.eligibilityProgress||100);return'<div class="exam-box"><span class="eyebrow">FINAL ASSESSMENT</span><h3>'+esc(exam.title)+'</h3><p>'+Number(exam.questionCount||0)+' questions · '+Number(exam.durationMinutes||30)+' minutes · Passing '+Number(exam.passingScore||50)+'%</p><p class="muted">Required progress: '+Number(exam.eligibilityProgress||100)+'% · Your progress: '+Number(course.progress||0)+'%</p>'+(eligible?'<a class="btn btn-green" href="final-exam.html?id='+encodeURIComponent(exam.id)+'">Take Final Exam</a>':'<a class="btn btn-outline" href="exams.html">Continue Learning to Unlock</a>')+'</div>';}
+function renderLesson(){if(!selectedLesson)return'<h2>No lessons available</h2><p class="muted">Your instructor has not published any lessons yet.</p>'+renderExam();const v=selectedLesson.videos?.[0],mats=selectedLesson.materials||[];return'<span class="eyebrow">LESSON</span><h2>'+esc(selectedLesson.title)+'</h2><p class="muted">'+esc(selectedLesson.description||"")+'</p>'+(v?'<div class="video-box">'+videoEmbed(v.videoUrl)+'</div><p style="margin-top:10px"><a href="'+esc(v.videoUrl)+'" target="_blank" rel="noopener">Open video in new tab</a></p>':'<div class="card" style="margin-top:20px"><div class="card-body"><p class="muted">No published video for this lesson yet.</p></div></div>')+'<h3 style="margin-top:28px">Study Materials</h3>'+(mats.length?mats.map(m=>'<div class="material"><span><strong>'+esc(m.title)+'</strong><br><small class="muted">'+esc(m.fileType||"File")+'</small></span><a class="btn btn-outline" href="'+esc(m.materialUrl)+'" target="_blank" rel="noopener">Open</a></div>').join(""):'<p class="muted">No materials published for this lesson yet.</p>')+'<div style="margin-top:28px"><button class="btn btn-primary" id="completeBtn" '+(selectedLesson.completed?"disabled":"")+'>'+(selectedLesson.completed?"✓ Lesson Completed":"Mark Lesson Complete")+'</button></div>'+renderExam();}
+async function bindComplete(){document.getElementById("completeBtn")?.addEventListener("click",async()=>{try{const result=await window.CWU.completeLesson(courseId,selectedLesson.id);selectedLesson.completed=true;course.progress=result.progress;course.completedLessons=result.completedLessons;course.totalLessons=result.totalLessons;render();bindComplete();showToast("Lesson completed");}catch(e){showToast(e.message);}});}
+async function load(){try{if(!courseId){root.innerHTML='<div class="card"><div class="card-body"><h2>Course not specified</h2></div></div>';return;}const user=await window.CWU.currentUser();if(!user){location.href="login.html?redirect=learn";return;}const result=await window.CWU.studentCourse(courseId);course=result.course;try{courseExams=(await window.CWU.exams()).filter(e=>e.courseId===courseId);}catch(_){courseExams=[];}render();bindComplete();}catch(e){root.innerHTML='<div class="card"><div class="card-body"><h2>Unable to open course</h2><p>'+esc(e.message)+'</p><a class="btn btn-outline" href="dashboard.html">Back to Dashboard</a></div></div>';}}load();
+</script></body></html>
